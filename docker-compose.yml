@@ -1,0 +1,38 @@
+services:
+  scheduler_engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scheduler_engine
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - rcp_network
+
+  rcp_client:
+    build:
+      context: ./rcp_client
+      dockerfile: Dockerfile
+    container_name: rcp_client
+    ports:
+      - "8080:8080"
+    environment:
+      - SCHEDULER_URL=http://scheduler_engine:8000
+      - PORT=8080
+    depends_on:
+      scheduler_engine:
+        condition: service_healthy
+    networks:
+      - rcp_network
+
+networks:
+  rcp_network:
+    driver: bridge

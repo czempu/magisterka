@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RCP Scheduler Pro Enterprise | Studio Harmonogramowania & Benchmark</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            emerald: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+              950: '#022c22'
+            },
+            zinc: {
+              850: '#1e1e24',
+              900: '#18181b',
+              950: '#0f0f12'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { height: 6px; width: 6px; }
+    ::-webkit-scrollbar-track { background: #0c0c0e; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+    .tab-active { 
+      border-bottom: 2px solid #10b981; 
+      color: #34d399; 
+      font-weight: 600; 
+      background: rgba(16, 185, 129, 0.06); 
+    }
+  </style>
+</head>
+<body class="bg-[#0b0b0e] text-zinc-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
+
+  <!-- TOP BAR -->
+  <header class="border-b border-zinc-800/80 bg-zinc-900/90 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between shadow-xl">
+    <div class="flex items-center gap-3.5">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-800 flex items-center justify-center shadow-lg shadow-emerald-900/30 border border-emerald-500/20">
+        <i data-lucide="calendar-range" class="w-5 h-5 text-emerald-200"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-lg tracking-tight text-zinc-100 flex items-center gap-2">
+            RCP Scheduler Studio
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Research & Enterprise Edition</span>
+          </h1>
+          <span class="text-xs bg-zinc-800/80 text-zinc-400 font-mono px-2 py-0.5 rounded border border-zinc-700/60">Go Core :8080</span>
+        </div>
+        <p class="text-xs text-zinc-400">Optymalizacja matematyczna harmonogramów (OR-Tools CP-SAT & SCIP MILP) z analizą kosztów KP</p>
+      </div>
+    </div>
+
+    <!-- Prawy pasek akcji -->
+    <div class="flex items-center gap-2.5">
+      <button onclick="runBenchmarkMode()" id="benchHeaderBtn" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-600/50 shadow-sm transition">
+        <i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-400 fill-emerald-400"></i> Pojedynek CP-SAT vs SCIP
+      </button>
+      <button onclick="openCostSummaryModal()" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-850 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-700/70 transition">
+        <i data-lucide="badge-dollar-sign" class="w-3.5 h-3.5 text-emerald-400"></i> Kosztorys KP (Art. 151)
+      </button>
+      <button onclick="openJsonModal()" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-850 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-700/70 transition">
+        <i data-lucide="code" class="w-3.5 h-3.5 text-zinc-400"></i> JSON
+      </button>
+      <a href="http://localhost:8000/docs" target="_blank" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-850 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-700/70 transition">
+        <i data-lucide="book-open" class="w-3.5 h-3.5 text-zinc-400"></i> Swagger API
+      </a>
+      <button id="exportExcelBtn" onclick="exportToExcel()" disabled class="text-xs flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-950 font-bold shadow-md shadow-emerald-950 transition">
+        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Pobierz Excel (.xlsx)
+      </button>
+    </div>
+  </header>
+
+  <!-- GŁÓWNA ZAWARTOŚĆ -->
+  <main class="flex-1 p-5 max-w-[1850px] w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- LEWY PANEL: KONFIGURATOR (5/12 kolumn) -->
+    <div class="lg:col-span-5 xl:col-span-4 flex flex-col gap-4">
+      
+      <!-- Karta główna konfiguratora -->
+      <div class="bg-zinc-900/90 border border-zinc-800/90 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        
+        <!-- Pasek zakładek -->
+        <div class="flex border-b border-zinc-800 bg-zinc-950/70 overflow-x-auto text-xs">
+          <button onclick="switchTab('tab-general')" id="btn-tab-general" class="tab-btn tab-active px-3 py-2.5 flex items-center gap-1.5 whitespace-nowrap transition">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i> Solver & Daty
+          </button>
+          <button onclick="switchTab('tab-kp')" id="btn-tab-kp" class="tab-btn px-3 py-2.5 text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 whitespace-nowrap transition">
+            <i data-lucide="scale" class="w-3.5 h-3.5"></i> Prawo & Koszty
+          </button>
+          <button onclick="switchTab('tab-employees')" id="btn-tab-employees" class="tab-btn px-3 py-2.5 text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 whitespace-nowrap transition">
+            <i data-lucide="users" class="w-3.5 h-3.5"></i> Kadra (<span id="empCountBadge" class="text-emerald-400 font-mono">8</span>)
+          </button>
+          <button onclick="switchTab('tab-shifts')" id="btn-tab-shifts" class="tab-btn px-3 py-2.5 text-zinc-400 hover:text-zinc-200 flex items-center gap-1.5 whitespace-nowrap transition">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i> Zmiany & Popyt
+          </button>
+        </div>
+
+        <div class="p-5 flex-1 space-y-4">
+
+          <!-- ================= TAB 1: SOLVER & DATY ================= -->
+          <div id="tab-general" class="tab-pane space-y-4">
+            <!-- Scenariusz biznesowy -->
+            <div>
+              <label class="text-xs font-semibold text-zinc-300 flex items-center gap-1.5 mb-1.5">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-emerald-400"></i> Gotowy Scenariusz Biznesowy (Preset)
+              </label>
+              <select id="scenarioPreset" onchange="loadPreset(this.value)" class="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500 transition">
+                <option value="multi_skill">1. Zespół Wielospecjalistyczny (Kierownicy, Med, UDT - 3x8h)</option>
+                <option value="shift_12h">2. System Równoważny 12h (Dzień / Noc 2x12h, Ochrona/Szpital)</option>
+                <option value="holidays_turn">3. Przełom Miesięcy (1 i 11 Listopada, Święta PL, Art. 130 KP)</option>
+                <option value="custom">✏️ Własny / Zmodyfikowany przez Użytkownika</option>
+              </select>
+            </div>
+
+            <!-- Wybór Algorytmu -->
+            <div>
+              <label class="text-xs font-semibold text-zinc-300 mb-1.5 block">Silnik Matematyczny</label>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="cursor-pointer border border-zinc-800 bg-zinc-950/80 rounded-xl p-2.5 flex items-center gap-2 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/10 transition">
+                  <input type="radio" name="solverChoice" value="cp-sat" checked class="accent-emerald-500">
+                  <div>
+                    <div class="text-xs font-bold text-zinc-100 flex items-center gap-1">CP-SAT <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded font-mono">Fast CP</span></div>
+                    <div class="text-[10px] text-zinc-400">Google OR-Tools</div>
+                  </div>
+                </label>
+                <label class="cursor-pointer border border-zinc-800 bg-zinc-950/80 rounded-xl p-2.5 flex items-center gap-2 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/10 transition">
+                  <input type="radio" name="solverChoice" value="scip" class="accent-emerald-500">
+                  <div>
+                    <div class="text-xs font-bold text-zinc-100 flex items-center gap-1">SCIP <span class="text-[9px] bg-zinc-700 text-zinc-300 px-1 py-0.2 rounded font-mono">MILP</span></div>
+                    <div class="text-[10px] text-zinc-400">PySCIPOpt Exact</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Zakres Dat -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-medium text-zinc-300 mb-1 block">Początek okresu</label>
+                <input type="date" id="startDate" value="2026-11-02" onchange="markCustom()" class="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-zinc-300 mb-1 block">Koniec okresu</label>
+                <input type="date" id="endDate" value="2026-11-15" onchange="markCustom()" class="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+              </div>
+            </div>
+
+            <!-- Limit czasu obliczeń (Time Limit) -->
+            <div>
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Limit czasu obliczeń:</span>
+                <span id="timeLimitVal" class="font-mono text-emerald-400 font-semibold">15 s</span>
+              </div>
+              <input type="range" id="timeLimit" min="2" max="60" value="15" step="1" oninput="document.getElementById('timeLimitVal').textContent = this.value + ' s'" class="w-full accent-emerald-500 cursor-pointer">
+              <div class="flex justify-between text-[10px] text-zinc-500 mt-0.5">
+                <span>2s (Szybki szkic)</span>
+                <span>15s (Optymalny)</span>
+                <span>60s (Dowód matematyczny)</span>
+              </div>
+            </div>
+
+            <!-- Ręczny nadpis normy godzinowej -->
+            <div class="pt-2 border-t border-zinc-800/80">
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-xs font-medium text-zinc-300">Wymuś sztywny limit godzin (Opcjonalne):</label>
+                <span class="text-[10px] text-zinc-500">(Zastępuje Art. 130 KP)</span>
+              </div>
+              <input type="number" id="manualNormHours" placeholder="np. 80 (pozostaw puste dla auto Art. 130 KP)" class="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500">
+            </div>
+
+          </div>
+
+          <!-- ================= TAB 2: KODEKS PRACY I KOSZTY ================= -->
+          <div id="tab-kp" class="tab-pane hidden space-y-3.5">
+            <div class="bg-zinc-950/70 p-3 rounded-xl border border-zinc-800 text-xs text-zinc-400 leading-relaxed">
+              Konfiguruj obostrzenia polskiego Prawa Pracy oraz parametry kalkulatora dodatków płacowych.
+            </div>
+
+            <div class="space-y-2">
+              <label class="flex items-start gap-2.5 text-xs text-zinc-300 cursor-pointer p-2 rounded-lg hover:bg-zinc-800/50 transition">
+                <input type="checkbox" id="autoNorm" checked class="mt-0.5 rounded accent-emerald-500">
+                <div>
+                  <div class="font-semibold text-zinc-200">Automatyczna norma godzinowa (Art. 130 KP)</div>
+                  <div class="text-[11px] text-zinc-400">Wylicza wymiar: (tygodnie * 40h) + (dni wystające * 8h) - (święta pon-sb * 8h) * FTE.</div>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-2.5 text-xs text-zinc-300 cursor-pointer p-2 rounded-lg hover:bg-zinc-800/50 transition">
+                <input type="checkbox" id="sundayRule" checked class="mt-0.5 rounded accent-emerald-500">
+                <div>
+                  <div class="font-semibold text-zinc-200">Gwarancja wolnej niedzieli (Art. 151.10 KP)</div>
+                  <div class="text-[11px] text-zinc-400">Pracujący w niedziele musi mieć zapewnioną co najmniej 1 całkowicie wolną niedzielę na 4 tygodnie.</div>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-2.5 text-xs text-zinc-300 cursor-pointer p-2 rounded-lg hover:bg-zinc-800/50 transition">
+                <input type="checkbox" id="forwardRotation" class="mt-0.5 rounded accent-emerald-500">
+                <div>
+                  <div class="font-semibold text-zinc-200">Ergonomia: Zakaz rotacji wstecznej</div>
+                  <div class="text-[11px] text-zinc-400">Zapobiega planowaniu zmian w cyklu wstecznym (np. Noc $\rightarrow$ Popołudnie lub Popołudnie $\rightarrow$ Rano).</div>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-2.5 text-xs text-zinc-300 cursor-pointer p-2 rounded-lg hover:bg-zinc-800/50 transition">
+                <input type="checkbox" id="fairnessNights" checked class="mt-0.5 rounded accent-emerald-500">
+                <div>
+                  <div class="font-semibold text-zinc-200">Sprawiedliwy podział uciążliwości (Nocek)</div>
+                  <div class="text-[11px] text-zinc-400">Algorytm równoważy obciążenie nocnymi zmianami pomiędzy wszystkich uprawnionych pracowników.</div>
+                </div>
+              </label>
+            </div>
+
+            <!-- Parametry finansowe KP -->
+            <div class="pt-2 border-t border-zinc-800/80 space-y-2">
+              <span class="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                <i data-lucide="coins" class="w-3.5 h-3.5 text-emerald-400"></i> Stawki i Parametry Finansowe
+              </span>
+              <div class="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <label class="text-zinc-400 block mb-0.5">Bazowa stawka [zł/h]:</label>
+                  <input type="number" id="baseHourlyRate" value="35" min="20" max="300" onchange="markCustom()" class="w-full bg-zinc-950 border border-zinc-700/80 rounded px-2 py-1 text-zinc-200 font-mono focus:border-emerald-500">
+                </div>
+                <div>
+                  <label class="text-zinc-400 block mb-0.5">Dodatek nocny (Art. 151.8):</label>
+                  <input type="number" id="nightBonusPercent" value="20" min="10" max="100" class="w-full bg-zinc-950 border border-zinc-700/80 rounded px-2 py-1 text-zinc-200 font-mono focus:border-emerald-500"> %
+                </div>
+              </div>
+            </div>
+
+            <!-- Limit kolejnych dni pracy -->
+            <div class="pt-2 border-t border-zinc-800/80">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Maks. kolejnych dni pracy (Art. 133 KP odpoczynek 35h):</span>
+                <span id="maxConsecutiveVal" class="font-mono text-emerald-400 font-semibold">6 dni</span>
+              </div>
+              <input type="range" id="maxConsecutiveDays" min="3" max="7" value="6" step="1" oninput="document.getElementById('maxConsecutiveVal').textContent = this.value + ' dni'" class="w-full accent-emerald-500 cursor-pointer">
+            </div>
+
+            <!-- Dni Zamknięte i Święta Specjalne -->
+            <div class="pt-2 border-t border-zinc-800/80 space-y-2">
+              <div>
+                <label class="text-xs font-medium text-zinc-300 block mb-1">Dni zamknięte zakładu (Brak pracy, zero obsady):</label>
+                <input type="text" id="closedDaysInput" placeholder="np. 2026-11-01, 2026-12-25" class="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+                <span class="text-[10px] text-zinc-500">Format: RRRR-MM-DD po przecinku</span>
+              </div>
+              <div>
+                <label class="text-xs font-medium text-zinc-300 block mb-1">Dodatkowe święta firmowe (Dni wolne od pracy):</label>
+                <input type="text" id="customHolidaysInput" placeholder="np. 2026-11-02" class="w-full bg-zinc-950 border border-zinc-700/80 rounded-xl px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ================= TAB 3: PRACOWNICY & KADRA ================= -->
+          <div id="tab-employees" class="tab-pane hidden space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-zinc-300">Lista Zespołu</span>
+              <button onclick="addEmployeeRow()" class="text-xs bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-600/40 px-2.5 py-1 rounded-lg flex items-center gap-1 transition">
+                <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> Dodaj pracownika
+              </button>
+            </div>
+
+            <div id="employeesList" class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+              <!-- Renderowane dynamicznie przez JS -->
+            </div>
+            <p class="text-[10px] text-zinc-500 italic">Ochrona prawna (Art. 178 KP): Kobiety w ciąży i rodzice dzieci do lat 4 mają ustawowy zakaz pracy w nocy bez zgody.</p>
+          </div>
+
+          <!-- ================= TAB 4: SYSTEM ZMIAN I POPYT ================= -->
+          <div id="tab-shifts" class="tab-pane hidden space-y-3.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-zinc-300">Model Zmianowy</span>
+              <select id="shiftSystemPreset" onchange="changeShiftSystem(this.value)" class="bg-zinc-950 border border-zinc-700 rounded-lg text-xs px-2 py-1 text-zinc-200 focus:outline-none focus:border-emerald-500">
+                <option value="3x8">System 3-zmianowy (3x8h: Rano, Popołudnie, Noc)</option>
+                <option value="2x12">System równoważny (2x12h: Dzień, Noc)</option>
+                <option value="1x8">Biurowy jednozmianowy (1x8h)</option>
+              </select>
+            </div>
+
+            <!-- Tabela zmian roboczych -->
+            <div class="border border-zinc-800 rounded-xl overflow-hidden text-xs">
+              <table class="w-full text-left">
+                <thead class="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[10px] uppercase">
+                  <tr>
+                    <th class="p-2">ID</th>
+                    <th class="p-2">Nazwa</th>
+                    <th class="p-2">Start</th>
+                    <th class="p-2">Czas</th>
+                    <th class="p-2">Min. obsada/dzień</th>
+                  </tr>
+                </thead>
+                <tbody id="shiftsTableBody" class="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                  <!-- Wypełniane przez JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Popyt na specjalizacje (Skills Demand) -->
+            <div class="pt-2 border-t border-zinc-800 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-zinc-300">Wymóg Kwalifikacji na Zmianach</span>
+                <button onclick="addSkillDemandRow()" class="text-[11px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">
+                  + Dodaj wymóg
+                </button>
+              </div>
+              <div id="skillDemandList" class="space-y-1.5 text-xs">
+                <!-- Wypełniane przez JS -->
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- PRZYCISKI GENEROWANIA / BENCHMARKU -->
+        <div class="p-4 border-t border-zinc-800 bg-zinc-950/80 space-y-2">
+          <button id="generateBtn" onclick="runOptimization()" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-zinc-950 font-bold text-sm shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 transition active:scale-[0.99]">
+            <span id="btnIcon"><i data-lucide="play" class="w-4 h-4 fill-zinc-950"></i></span>
+            <span id="btnText">Uruchom Optymalizację Grafiku</span>
+          </button>
+          <button onclick="runBenchmarkMode()" class="w-full py-2 px-3 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-emerald-400 hover:text-emerald-300 font-semibold text-xs border border-zinc-700/80 flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="swords" class="w-3.5 h-3.5"></i> Porównaj CP-SAT z SCIP (Pojedynek Solwerów)
+          </button>
+        </div>
+
+      </div>
+
+      <!-- KAFELEK TELEMETRII / KPI -->
+      <div id="metricsCard" class="bg-zinc-900/90 border border-zinc-800/90 rounded-2xl p-4 shadow-xl hidden">
+        <div class="flex items-center justify-between mb-3 border-b border-zinc-800/80 pb-2">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+            <i data-lucide="gauge" class="w-4 h-4 text-emerald-400"></i> Wskaźniki Optymalizacji (KPI)
+          </h3>
+          <span id="metricEngineBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">CP-SAT</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+          <div class="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+            <div class="text-[10px] text-zinc-500 uppercase">Status</div>
+            <div id="metricStatus" class="text-xs font-bold text-emerald-400 mt-0.5">OPTIMAL</div>
+          </div>
+          <div class="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+            <div class="text-[10px] text-zinc-500 uppercase">Czas</div>
+            <div id="metricTime" class="text-xs font-bold text-zinc-200 mt-0.5 font-mono">24.5 ms</div>
+          </div>
+          <div class="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+            <div class="text-[10px] text-zinc-500 uppercase">Norma KP</div>
+            <div id="metricNorm" class="text-xs font-bold text-zinc-200 mt-0.5 font-mono">80 h</div>
+          </div>
+          <div class="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+            <div class="text-[10px] text-zinc-500 uppercase">Szac. Koszt</div>
+            <div id="metricCost" class="text-xs font-bold text-emerald-400 mt-0.5 font-mono">0 zł</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PRAWY PANEL: MATRYCA KALENDARZA I TABELA HARMONOGRAMU (8/12 kolumn) -->
+    <div class="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
+      <div class="bg-zinc-900/90 border border-zinc-800/90 rounded-2xl p-5 shadow-2xl flex flex-col min-h-[620px]">
+        
+        <!-- Pasek tytułowy widoku grafiku -->
+        <div class="flex flex-wrap items-center justify-between pb-3.5 border-b border-zinc-800/80 gap-3">
+          <div>
+            <h2 class="text-base font-bold text-zinc-100 flex items-center gap-2">
+              <i data-lucide="layout-grid" class="w-5 h-5 text-emerald-400"></i>
+              Interaktywny Kalendarz Harmonogramu
+              <span class="text-[11px] font-normal text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded border border-zinc-700">Edycja: kliknij komórkę pracownika</span>
+            </h2>
+            <p id="scheduleSubtitle" class="text-xs text-zinc-400 mt-0.5">
+              Skonfiguruj parametry po lewej stronie i naciśnij przycisk optymalizacji.
+            </p>
+          </div>
+
+          <!-- Filtry i Przełączniki widoku -->
+          <div class="flex items-center gap-2">
+            <div id="shiftLegend" class="flex flex-wrap items-center gap-1.5 text-xs">
+              <!-- Wypełniane dynamicznie -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Obszar tabeli kalendarza -->
+        <div class="flex-1 overflow-x-auto mt-3" id="tableContainer">
+          <div id="emptyState" class="h-96 flex flex-col items-center justify-center text-zinc-500">
+            <div class="w-16 h-16 rounded-2xl bg-zinc-850/60 border border-zinc-800 flex items-center justify-center mb-3">
+              <i data-lucide="calendar" class="w-8 h-8 stroke-[1.25] text-zinc-600"></i>
+            </div>
+            <p class="text-sm font-semibold text-zinc-300">Brak aktywnego harmonogramu</p>
+            <p class="text-xs text-zinc-500 mt-1 max-w-sm text-center">Wybierz parametry, dostosuj pracowników lub załaduj preset i uruchom silnik solvera.</p>
+          </div>
+          <table id="scheduleTable" class="w-full border-collapse hidden text-left text-xs whitespace-nowrap">
+            <!-- Dynamicznie generowany nagłówek, wiersze pracowników oraz sekcja Coverage -->
+          </table>
+        </div>
+
+        <!-- Stopka pomocnicza pod kalendarzem -->
+        <div class="mt-4 pt-3 border-t border-zinc-800/60 flex flex-wrap items-center justify-between text-[11px] text-zinc-400 gap-2">
+          <div class="flex items-center gap-3">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500"></span> Norma spełniona (100%)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-zinc-700/60 border border-zinc-500"></span> Niedobór normy</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-amber-500/20 border border-amber-500"></span> Nadgodziny</span>
+          </div>
+          <div class="text-zinc-500 font-mono text-[10px]">
+            Art. 132 KP (11h dobowo) • Art. 133 KP (35h tygodniowo) • Art. 151.10 KP (Niedziela)
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL 1: POJEDYNEK SOLWERÓW (BENCHMARK CP-SAT VS SCIP) -->
+  <div id="benchmarkModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-zinc-100 flex items-center gap-2">
+          <i data-lucide="swords" class="w-4 h-4 text-emerald-400"></i> Pojedynek Solverów: Google CP-SAT vs SCIP MILP
+        </h3>
+        <button onclick="closeBenchmarkModal()" class="text-zinc-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="p-5 flex-1 overflow-auto space-y-5 bg-[#0e0e12]">
+        
+        <!-- Porównanie kart Side-by-Side -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Karta CP-SAT -->
+          <div class="bg-zinc-900/90 border border-emerald-500/40 rounded-xl p-4 space-y-3 relative overflow-hidden">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                <span class="font-bold text-sm text-zinc-100">Google OR-Tools CP-SAT</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">Constraint Prog.</span>
+            </div>
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between"><span class="text-zinc-400">Czas rozwiązania:</span> <span id="benchCpsatTime" class="font-mono font-bold text-emerald-400">-</span></div>
+              <div class="flex justify-between"><span class="text-zinc-400">Status rozwiązania:</span> <span id="benchCpsatStatus" class="font-mono text-zinc-200">-</span></div>
+              <div class="flex justify-between"><span class="text-zinc-400">Wartość funkcji celu:</span> <span id="benchCpsatObj" class="font-mono text-zinc-200">-</span></div>
+            </div>
+          </div>
+
+          <!-- Karta SCIP -->
+          <div class="bg-zinc-900/90 border border-zinc-700 rounded-xl p-4 space-y-3 relative overflow-hidden">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-400"></span>
+                <span class="font-bold text-sm text-zinc-100">PySCIPOpt / SCIP</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">MILP Branch & Cut</span>
+            </div>
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between"><span class="text-zinc-400">Czas rozwiązania:</span> <span id="benchScipTime" class="font-mono font-bold text-zinc-200">-</span></div>
+              <div class="flex justify-between"><span class="text-zinc-400">Status rozwiązania:</span> <span id="benchScipStatus" class="font-mono text-zinc-200">-</span></div>
+              <div class="flex justify-between"><span class="text-zinc-400">Wartość funkcji celu:</span> <span id="benchScipObj" class="font-mono text-zinc-200">-</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Podsumowanie Zwycięzcy i Przyspieszenia -->
+        <div class="bg-emerald-950/30 border border-emerald-700/50 p-3.5 rounded-xl flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="trophy" class="w-5 h-5 text-emerald-400"></i>
+            <div>
+              <div class="text-xs text-zinc-400">Zwycięzca benchmarku:</div>
+              <div id="benchWinner" class="text-sm font-bold text-emerald-300">-</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-xs text-zinc-400">Różnica prędkości:</div>
+            <div id="benchSpeedup" class="text-base font-bold text-emerald-400 font-mono">-</div>
+          </div>
+        </div>
+
+        <!-- Generowany Kod Tabeli LaTeX (dla pracy magisterskiej) -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+              <i data-lucide="file-text" class="w-3.5 h-3.5 text-emerald-400"></i> Kod tabeli LaTeX (Do pracy dyplomowej):
+            </span>
+            <button onclick="copyLatexCode()" class="text-xs text-emerald-400 hover:text-emerald-300 font-medium">
+              Kopiuj LaTeX
+            </button>
+          </div>
+          <pre id="latexCodePreview" class="bg-zinc-950 border border-zinc-800 p-3 rounded-xl text-[11px] text-zinc-300 overflow-x-auto leading-relaxed font-mono"></pre>
+        </div>
+
+      </div>
+      <div class="p-3 border-t border-zinc-800 bg-zinc-950 flex justify-end">
+        <button onclick="closeBenchmarkModal()" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2 rounded-xl transition">
+          Zamknij
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: ANALIZA KOSZTOWA I DODATKI KP (Art. 151 KP) -->
+  <div id="costModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-zinc-100 flex items-center gap-2">
+          <i data-lucide="badge-dollar-sign" class="w-4 h-4 text-emerald-400"></i> Kosztorys Płacowy Harmonogramu (Kodeks Pracy)
+        </h3>
+        <button onclick="closeCostModal()" class="text-zinc-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="p-5 flex-1 overflow-auto space-y-4 bg-[#0e0e12]">
+        
+        <div class="grid grid-cols-3 gap-3 text-center">
+          <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+            <div class="text-[10px] text-zinc-500 uppercase">Wynagrodzenie Zasadnicze</div>
+            <div id="costBaseTotal" class="text-sm font-bold text-zinc-200 mt-1 font-mono">0 zł</div>
+          </div>
+          <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+            <div class="text-[10px] text-zinc-500 uppercase">Dodatki Nocne (20%)</div>
+            <div id="costNightTotal" class="text-sm font-bold text-emerald-400 mt-1 font-mono">0 zł</div>
+          </div>
+          <div class="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+            <div class="text-[10px] text-zinc-500 uppercase">Łączny Koszt Płac</div>
+            <div id="costGrandTotal" class="text-base font-bold text-emerald-300 mt-0.5 font-mono">0 zł</div>
+          </div>
+        </div>
+
+        <div class="border border-zinc-800 rounded-xl overflow-hidden text-xs">
+          <table class="w-full text-left">
+            <thead class="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[10px] uppercase">
+              <tr>
+                <th class="p-2.5">Pracownik</th>
+                <th class="p-2.5 text-center">Godziny</th>
+                <th class="p-2.5 text-center">Noce</th>
+                <th class="p-2.5 text-right">Dodatek Nocny</th>
+                <th class="p-2.5 text-right">Razem</th>
+              </tr>
+            </thead>
+            <tbody id="costTableBody" class="divide-y divide-zinc-800/60 bg-zinc-900/40">
+              <!-- Renderowane dynamicznie -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+      <div class="p-3 border-t border-zinc-800 bg-zinc-950 flex justify-end">
+        <button onclick="closeCostModal()" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2 rounded-xl transition">
+          Zamknij
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: RĘCZNA EDYCJA ZMIANY W KOMÓRCE -->
+  <div id="overrideModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+        <h4 class="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+          <i data-lucide="edit-3" class="w-3.5 h-3.5 text-emerald-400"></i> Ręczna Zmiana w Grafiku
+        </h4>
+        <button onclick="closeOverrideModal()" class="text-zinc-500 hover:text-white">✕</button>
+      </div>
+      <div class="text-xs space-y-2">
+        <div id="overrideTargetInfo" class="text-zinc-400"></div>
+        <div>
+          <label class="text-[11px] text-zinc-400 block mb-1">Wybierz przypisanie:</label>
+          <select id="overrideShiftSelect" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-zinc-200 text-xs focus:outline-none focus:border-emerald-500">
+            <!-- Wypełniane dynamicznie -->
+          </select>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+        <button onclick="closeOverrideModal()" class="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700">Anuluj</button>
+        <button onclick="applyCellOverride()" class="text-xs px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold">Zapisz Zmianę</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: PODGLĄD JSON PAYLOAD -->
+  <div id="jsonModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl">
+      <div class="p-4 border-b border-zinc-800 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-zinc-100 flex items-center gap-2">
+          <i data-lucide="file-code" class="w-4 h-4 text-emerald-400"></i> Aktualny Payload JSON (Wysyłany do Solvera)
+        </h3>
+        <button onclick="closeJsonModal()" class="text-zinc-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="p-4 flex-1 overflow-auto bg-zinc-950">
+        <pre id="jsonPreview" class="text-xs text-emerald-300 leading-relaxed font-mono"></pre>
+      </div>
+      <div class="p-3 border-t border-zinc-800 flex justify-end">
+        <button onclick="copyJsonPayload()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold px-4 py-2 rounded-xl transition">
+          Kopiuj JSON
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT: LOGIKA APLIKACJI I PEŁNEGO KONTROLERA -->
+  <script>
+    // Stan aplikacji
+    let activePresetKey = 'multi_skill';
+    let currentShifts = [];
+    let currentEmployees = [];
+    let currentSkillDemand = [];
+    let currentResult = null;
+    let currentPayload = null;
+    let overrideTarget = null; // { empId, dayIdx }
+
+    // Paleta kolorów zmian dopasowana do stylistyki Dark Modern & Emerald
+    const SHIFT_THEMES = [
+      { bg: 'bg-emerald-950/60', text: 'text-emerald-300', border: 'border-emerald-600/50', badge: 'bg-emerald-500' },
+      { bg: 'bg-teal-950/60', text: 'text-teal-300', border: 'border-teal-600/50', badge: 'bg-teal-500' },
+      { bg: 'bg-zinc-800/80', text: 'text-zinc-200', border: 'border-zinc-600/60', badge: 'bg-zinc-400' },
+      { bg: 'bg-emerald-900/30', text: 'text-emerald-400', border: 'border-emerald-500/40', badge: 'bg-emerald-400' }
+    ];
+
+    // Prekonfigurowane scenariusze
+    const PRESETS = {
+      multi_skill: {
+        startDate: "2026-11-02",
+        endDate: "2026-11-15",
+        shifts: [
+          { id: 0, name: "Rano (8h)", start_hour: 6, duration_hours: 8, demand: 1 },
+          { id: 1, name: "Popołudnie (8h)", start_hour: 14, duration_hours: 8, demand: 1 },
+          { id: 2, name: "Noc (8h)", start_hour: 22, duration_hours: 8, demand: 1 }
+        ],
+        employees: [
+          { id: 0, name: "Jan Kowalski (Kierownik)", contract_fte: 1.0, skills: ["kierownik", "pierwsza_pomoc"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 1, name: "Anna Nowak (Kierownik)", contract_fte: 1.0, skills: ["kierownik"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 2, name: "Piotr Wiśniewski (UDT)", contract_fte: 1.0, skills: ["kierownik", "udt"], disallowed_shift_ids: [], vacation_days: ["2026-11-05", "2026-11-06"] },
+          { id: 3, name: "Tomasz Wójcik (Kierownik)", contract_fte: 1.0, skills: ["kierownik"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 4, name: "Katarzyna Kamińska (Med)", contract_fte: 1.0, skills: ["pierwsza_pomoc"], disallowed_shift_ids: [2], vacation_days: [] },
+          { id: 5, name: "Marek Lewandowski (Med)", contract_fte: 1.0, skills: ["pierwsza_pomoc", "udt"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 6, name: "Michał Zieliński (Med)", contract_fte: 1.0, skills: ["pierwsza_pomoc"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 7, name: "Ewa Kozłowska (0.5 FTE)", contract_fte: 0.5, skills: ["udt"], disallowed_shift_ids: [], vacation_days: [] }
+        ],
+        skillDemand: [
+          { shiftId: 0, skill: "kierownik", count: 1 },
+          { shiftId: 1, skill: "kierownik", count: 1 },
+          { shiftId: 2, skill: "pierwsza_pomoc", count: 1 }
+        ],
+        closedDays: [],
+        customHolidays: []
+      },
+      shift_12h: {
+        startDate: "2026-10-01",
+        endDate: "2026-10-28",
+        shifts: [
+          { id: 0, name: "Dzień (12h)", start_hour: 6, duration_hours: 12, demand: 1 },
+          { id: 1, name: "Noc (12h)", start_hour: 18, duration_hours: 12, demand: 1 }
+        ],
+        employees: [
+          { id: 0, name: "Kamil Bednarek", contract_fte: 1.0, skills: ["ochrona"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 1, name: "Monika Lis", contract_fte: 1.0, skills: ["ochrona"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 2, name: "Damian Król", contract_fte: 1.0, skills: ["ochrona"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 3, name: "Grzegorz Braun", contract_fte: 1.0, skills: ["ochrona"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 4, name: "Karolina Woźniak", contract_fte: 1.0, skills: ["ochrona"], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 5, name: "Szymon Majewski", contract_fte: 1.0, skills: ["ochrona"], disallowed_shift_ids: [], vacation_days: [] }
+        ],
+        skillDemand: [],
+        closedDays: [],
+        customHolidays: []
+      },
+      holidays_turn: {
+        startDate: "2026-10-25",
+        endDate: "2026-11-07",
+        shifts: [
+          { id: 0, name: "Rano (8h)", start_hour: 6, duration_hours: 8, demand: 1 },
+          { id: 1, name: "Popołudnie (8h)", start_hour: 14, duration_hours: 8, demand: 1 },
+          { id: 2, name: "Noc (8h)", start_hour: 22, duration_hours: 8, demand: 1 }
+        ],
+        employees: [
+          { id: 0, name: "Kowalski (Opieka art 178)", contract_fte: 1.0, skills: [], disallowed_shift_ids: [2], vacation_days: [] },
+          { id: 1, name: "Nowak (0.5 FTE)", contract_fte: 0.5, skills: [], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 2, name: "Wiśniewski (Urlop 5-6.11)", contract_fte: 1.0, skills: [], disallowed_shift_ids: [], vacation_days: ["2026-11-05", "2026-11-06"] },
+          { id: 3, name: "Zieliński (Student)", contract_fte: 1.0, skills: [], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 4, name: "Wójcik (1.0)", contract_fte: 1.0, skills: [], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 5, name: "Kamińska (1.0)", contract_fte: 1.0, skills: [], disallowed_shift_ids: [], vacation_days: [] },
+          { id: 6, name: "Lewandowski (1.0)", contract_fte: 1.0, skills: [], disallowed_shift_ids: [], vacation_days: [] }
+        ],
+        skillDemand: [],
+        closedDays: ["2026-11-01"],
+        customHolidays: ["2026-11-02"]
+      }
+    };
+
+    // Nawigacja zakładkami
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('tab-active');
+        btn.classList.add('text-zinc-400');
+      });
+      document.getElementById(tabId).classList.remove('hidden');
+      const activeBtn = document.getElementById('btn-' + tabId);
+      activeBtn.classList.add('tab-active');
+      activeBtn.classList.remove('text-zinc-400');
+      lucide.createIcons();
+    }
+
+    function markCustom() {
+      document.getElementById('scenarioPreset').value = 'custom';
+    }
+
+    // Załaduj scenariusz do stanu i UI
+    function loadPreset(key) {
+      if (key === 'custom') return;
+      activePresetKey = key;
+      const preset = PRESETS[key];
+      if (!preset) return;
+
+      document.getElementById('startDate').value = preset.startDate;
+      document.getElementById('endDate').value = preset.endDate;
+      document.getElementById('closedDaysInput').value = (preset.closedDays || []).join(', ');
+      document.getElementById('customHolidaysInput').value = (preset.customHolidays || []).join(', ');
+
+      currentShifts = JSON.parse(JSON.stringify(preset.shifts));
+      currentEmployees = JSON.parse(JSON.stringify(preset.employees));
+      currentSkillDemand = JSON.parse(JSON.stringify(preset.skillDemand || []));
+
+      renderEmployeesUI();
+      renderShiftsUI();
+      renderSkillDemandUI();
+      document.getElementById('scenarioPreset').value = key;
+    }
+
+    // System Zmianowy
+    function changeShiftSystem(type) {
+      markCustom();
+      if (type === '3x8') {
+        currentShifts = [
+          { id: 0, name: "Rano (8h)", start_hour: 6, duration_hours: 8, demand: 1 },
+          { id: 1, name: "Popołudnie (8h)", start_hour: 14, duration_hours: 8, demand: 1 },
+          { id: 2, name: "Noc (8h)", start_hour: 22, duration_hours: 8, demand: 1 }
+        ];
+      } else if (type === '2x12') {
+        currentShifts = [
+          { id: 0, name: "Dzień (12h)", start_hour: 6, duration_hours: 12, demand: 1 },
+          { id: 1, name: "Noc (12h)", start_hour: 18, duration_hours: 12, demand: 1 }
+        ];
+      } else if (type === '1x8') {
+        currentShifts = [
+          { id: 0, name: "Biuro (8h)", start_hour: 8, duration_hours: 8, demand: 2 }
+        ];
+      }
+      renderShiftsUI();
+    }
+
+    function renderShiftsUI() {
+      const tbody = document.getElementById('shiftsTableBody');
+      tbody.innerHTML = '';
+      currentShifts.forEach((s, idx) => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-zinc-800/40 transition">
+            <td class="p-2 font-mono text-emerald-400 font-semibold">${s.id}</td>
+            <td class="p-2"><input type="text" value="${s.name}" onchange="currentShifts[${idx}].name=this.value; markCustom();" class="bg-zinc-950 border border-zinc-700/80 px-2 py-1 rounded w-28 text-zinc-200 focus:outline-none focus:border-emerald-500"></td>
+            <td class="p-2"><input type="number" min="0" max="23" value="${s.start_hour}" onchange="currentShifts[${idx}].start_hour=parseInt(this.value); markCustom();" class="bg-zinc-950 border border-zinc-700/80 px-1.5 py-1 rounded w-14 text-center text-zinc-200 focus:outline-none focus:border-emerald-500"> h</td>
+            <td class="p-2"><input type="number" min="1" max="24" value="${s.duration_hours}" onchange="currentShifts[${idx}].duration_hours=parseInt(this.value); markCustom();" class="bg-zinc-950 border border-zinc-700/80 px-1.5 py-1 rounded w-14 text-center text-zinc-200 focus:outline-none focus:border-emerald-500"> h</td>
+            <td class="p-2"><input type="number" min="0" max="20" value="${s.demand || 1}" onchange="currentShifts[${idx}].demand=parseInt(this.value); markCustom();" class="bg-zinc-950 border border-zinc-700/80 px-1.5 py-1 rounded w-14 text-center text-emerald-400 font-bold focus:outline-none focus:border-emerald-500 font-mono"></td>
+          </tr>
+        `;
+      });
+      lucide.createIcons();
+    }
+
+    // Renderowanie Listy Pracowników
+    function renderEmployeesUI() {
+      const container = document.getElementById('employeesList');
+      container.innerHTML = '';
+      document.getElementById('empCountBadge').textContent = currentEmployees.length;
+
+      currentEmployees.forEach((emp, idx) => {
+        const skillsStr = (emp.skills || []).join(', ');
+        const vacationStr = (emp.vacation_days || []).join(', ');
+        const isNightBanned = (emp.disallowed_shift_ids || []).includes(2);
+
+        container.innerHTML += `
+          <div class="bg-zinc-950/80 border border-zinc-800 p-2.5 rounded-xl text-xs space-y-2 hover:border-zinc-700 transition">
+            <div class="flex items-center justify-between gap-2">
+              <input type="text" value="${emp.name}" onchange="currentEmployees[${idx}].name=this.value; markCustom();" placeholder="Imię pracownika" class="font-semibold text-zinc-200 bg-transparent border-b border-zinc-800 focus:border-emerald-500 focus:outline-none flex-1">
+              <button onclick="removeEmployee(${idx})" class="text-zinc-500 hover:text-rose-400 p-1 transition">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <label class="text-zinc-400 block mb-0.5">Wymiar etatu (FTE):</label>
+                <input type="number" step="0.25" min="0.25" max="1.0" value="${emp.contract_fte}" onchange="currentEmployees[${idx}].contract_fte=parseFloat(this.value); markCustom();" class="w-full bg-zinc-900 border border-zinc-700/80 rounded px-1.5 py-0.5 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
+              </div>
+              <div>
+                <label class="text-zinc-400 block mb-0.5">Zakaz nocek (KP):</label>
+                <select onchange="toggleNightBan(${idx}, this.value)" class="w-full bg-zinc-900 border border-zinc-700/80 rounded px-1.5 py-0.5 text-zinc-200 focus:outline-none focus:border-emerald-500">
+                  <option value="0" ${!isNightBanned ? 'selected' : ''}>Dozwolone</option>
+                  <option value="1" ${isNightBanned ? 'selected' : ''}>🚫 Zakaz (Art. 178 KP)</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="text-[10px] text-zinc-400 block">Kwalifikacje (oddziel przecinkiem):</label>
+              <input type="text" value="${skillsStr}" onchange="updateEmployeeSkills(${idx}, this.value)" placeholder="np. kierownik, pierwsza_pomoc, udt" class="w-full bg-zinc-900 border border-zinc-700/80 rounded px-2 py-0.5 text-zinc-300 text-[11px] focus:outline-none focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="text-[10px] text-zinc-400 block">Urlop (daty RRRR-MM-DD po przecinku):</label>
+              <input type="text" value="${vacationStr}" onchange="updateEmployeeVacation(${idx}, this.value)" placeholder="np. 2026-11-05, 2026-11-06" class="w-full bg-zinc-900 border border-zinc-700/80 rounded px-2 py-0.5 text-zinc-300 text-[11px] focus:outline-none focus:border-emerald-500">
+            </div>
+          </div>
+        `;
+      });
+      lucide.createIcons();
+    }
+
+    function addEmployeeRow() {
+      markCustom();
+      const nextId = currentEmployees.length > 0 ? Math.max(...currentEmployees.map(e => e.id)) + 1 : 0;
+      currentEmployees.push({
+        id: nextId,
+        name: `Nowy Pracownik ${nextId}`,
+        contract_fte: 1.0,
+        skills: [],
+        disallowed_shift_ids: [],
+        vacation_days: []
+      });
+      renderEmployeesUI();
+    }
+
+    function removeEmployee(idx) {
+      markCustom();
+      currentEmployees.splice(idx, 1);
+      renderEmployeesUI();
+    }
+
+    function toggleNightBan(idx, val) {
+      markCustom();
+      if (val === "1") {
+        currentEmployees[idx].disallowed_shift_ids = [2];
+      } else {
+        currentEmployees[idx].disallowed_shift_ids = [];
+      }
+    }
+
+    function updateEmployeeSkills(idx, val) {
+      markCustom();
+      currentEmployees[idx].skills = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    function updateEmployeeVacation(idx, val) {
+      markCustom();
+      currentEmployees[idx].vacation_days = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    // Skills Demand
+    function renderSkillDemandUI() {
+      const container = document.getElementById('skillDemandList');
+      container.innerHTML = '';
+      if (currentSkillDemand.length === 0) {
+        container.innerHTML = '<div class="text-[11px] text-zinc-500 italic">Brak dodatkowych ograniczeń ról.</div>';
+        return;
+      }
+      currentSkillDemand.forEach((item, idx) => {
+        container.innerHTML += `
+          <div class="flex items-center gap-1.5 bg-zinc-950 p-1.5 rounded-lg border border-zinc-800">
+            <span class="text-zinc-400 text-[11px]">Zmiana ID:</span>
+            <input type="number" min="0" max="5" value="${item.shiftId}" onchange="currentSkillDemand[${idx}].shiftId=parseInt(this.value); markCustom();" class="w-12 bg-zinc-900 border border-zinc-700 px-1 py-0.5 rounded text-center font-mono">
+            <span class="text-zinc-400 text-[11px]">Rola:</span>
+            <input type="text" value="${item.skill}" onchange="currentSkillDemand[${idx}].skill=this.value; markCustom();" class="flex-1 bg-zinc-900 border border-zinc-700 px-2 py-0.5 rounded text-emerald-400 font-medium">
+            <span class="text-zinc-400 text-[11px]">Min:</span>
+            <input type="number" min="1" max="10" value="${item.count}" onchange="currentSkillDemand[${idx}].count=parseInt(this.value); markCustom();" class="w-12 bg-zinc-900 border border-zinc-700 px-1 py-0.5 rounded text-center font-bold font-mono">
+            <button onclick="removeSkillDemand(${idx})" class="text-zinc-500 hover:text-rose-400 px-1">✕</button>
+          </div>
+        `;
+      });
+    }
+
+    function addSkillDemandRow() {
+      markCustom();
+      currentSkillDemand.push({ shiftId: 0, skill: "kierownik", count: 1 });
+      renderSkillDemandUI();
+    }
+
+    function removeSkillDemand(idx) {
+      markCustom();
+      currentSkillDemand.splice(idx, 1);
+      renderSkillDemandUI();
+    }
+
+    // Budowa pełnego obiektu Payload dla API
+    function constructPayload() {
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      const solverChoice = document.querySelector('input[name="solverChoice"]:checked').value;
+      const autoNorm = document.getElementById('autoNorm').checked;
+      const sundayRule = document.getElementById('sundayRule').checked;
+      const forwardRotation = document.getElementById('forwardRotation').checked;
+      const fairnessNights = document.getElementById('fairnessNights').checked;
+      const maxConsecutiveDays = parseInt(document.getElementById('maxConsecutiveDays').value);
+      const timeLimitSeconds = parseFloat(document.getElementById('timeLimit').value);
+      const manualNorm = document.getElementById('manualNormHours').value;
+
+      const closedDays = document.getElementById('closedDaysInput').value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const customHolidays = document.getElementById('customHolidaysInput').value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+      const d1 = new Date(startDate);
+      const d2 = new Date(endDate);
+      const numDays = Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
+
+      const demand = {};
+      for (let d = 0; d < numDays; d++) {
+        currentShifts.forEach(s => {
+          demand[`d${d}_s${s.id}`] = s.demand || 1;
+        });
+      }
+
+      const skillDemand = {};
+      currentSkillDemand.forEach(item => {
+        if (item.skill && item.skill.trim().length > 0) {
+          skillDemand[`s${item.shiftId}_k_${item.skill.trim()}`] = item.count;
+        }
+      });
+
+      const payload = {
+        employees: currentEmployees,
+        start_date: startDate,
+        end_date: endDate,
+        shifts: currentShifts.map(s => ({ id: s.id, name: s.name, start_hour: s.start_hour, duration_hours: s.duration_hours })),
+        auto_calculate_work_norm: autoNorm,
+        require_sunday_rest_every_4_weeks: sundayRule,
+        enforce_forward_rotation: forwardRotation,
+        fairness_balance_nights: fairnessNights,
+        max_consecutive_days: maxConsecutiveDays,
+        custom_holidays: customHolidays,
+        closed_days: closedDays,
+        demand: demand,
+        skill_demand: skillDemand,
+        solver_choice: solverChoice,
+        time_limit_seconds: timeLimitSeconds
+      };
+
+      if (manualNorm && parseInt(manualNorm) > 0) {
+        payload.max_work_hours = parseInt(manualNorm);
+      }
+
+      return payload;
+    }
+
+    // Modal JSON
+    function openJsonModal() {
+      const p = constructPayload();
+      document.getElementById('jsonPreview').textContent = JSON.stringify(p, null, 2);
+      document.getElementById('jsonModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeJsonModal() {
+      document.getElementById('jsonModal').classList.add('hidden');
+    }
+
+    function copyJsonPayload() {
+      const text = document.getElementById('jsonPreview').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Skopiowano JSON do schowka!");
+      });
+    }
+
+    // Główna funkcja wywołująca Solver przez serwer Go
+    async function runOptimization() {
+      const btn = document.getElementById('generateBtn');
+      const btnIcon = document.getElementById('btnIcon');
+      const btnText = document.getElementById('btnText');
+
+      currentPayload = constructPayload();
+
+      btn.disabled = true;
+      btnText.textContent = "Solver oblicza optymalny grafik...";
+      btnIcon.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-zinc-950"></i>`;
+      lucide.createIcons();
+
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentPayload)
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText || `Błąd serwera (${response.status})`);
+        }
+
+        currentResult = await response.json();
+        renderSchedule(currentResult, currentPayload);
+        document.getElementById('exportExcelBtn').disabled = false;
+      } catch (err) {
+        alert("Błąd podczas optymalizacji grafiku: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = "Uruchom Optymalizację Grafiku";
+        btnIcon.innerHTML = `<i data-lucide="play" class="w-4 h-4 fill-zinc-950"></i>`;
+        lucide.createIcons();
+      }
+    }
+
+    // ================= BENCHMARK: CP-SAT VS SCIP =================
+    async function runBenchmarkMode() {
+      const p = constructPayload();
+      const benchBtn = document.getElementById('benchHeaderBtn');
+      benchBtn.disabled = true;
+      benchBtn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Testowanie...`;
+      lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/benchmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(p)
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(err || "Błąd podczas benchmarku");
+        }
+
+        const data = await res.json();
+        
+        // Wypełnij Modal Benchmarku
+        document.getElementById('benchCpsatTime').textContent = `${(data.cpsat_time_seconds * 1000).toFixed(1)} ms (${data.cpsat_time_seconds.toFixed(4)} s)`;
+        document.getElementById('benchCpsatStatus').textContent = data.cpsat_result.status;
+        document.getElementById('benchCpsatObj').textContent = data.cpsat_result.objective_value !== null ? data.cpsat_result.objective_value : '0.0';
+
+        document.getElementById('benchScipTime').textContent = `${(data.scip_time_seconds * 1000).toFixed(1)} ms (${data.scip_time_seconds.toFixed(4)} s)`;
+        document.getElementById('benchScipStatus').textContent = data.scip_result.status;
+        document.getElementById('benchScipObj').textContent = data.scip_result.objective_value !== null ? data.scip_result.objective_value : '0.0';
+
+        document.getElementById('benchWinner').textContent = data.winner;
+        document.getElementById('benchSpeedup').textContent = `${data.speedup_ratio}x szybciej`;
+        document.getElementById('latexCodePreview').textContent = data.latex_table_code;
+
+        document.getElementById('benchmarkModal').classList.remove('hidden');
+        lucide.createIcons();
+      } catch (e) {
+        alert("Błąd benchmarku: " + e.message);
+      } finally {
+        benchBtn.disabled = false;
+        benchBtn.innerHTML = `<i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-400 fill-emerald-400"></i> Pojedynek CP-SAT vs SCIP`;
+        lucide.createIcons();
+      }
+    }
+
+    function closeBenchmarkModal() {
+      document.getElementById('benchmarkModal').classList.add('hidden');
+    }
+
+    function copyLatexCode() {
+      const code = document.getElementById('latexCodePreview').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        alert("Skopiowano tabelę LaTeX do schowka! Gotowa do wklejenia do pracy.");
+      });
+    }
+
+    // ================= KALKULATOR KOSZTÓW PŁAC (Art. 151 KP) =================
+    function calculateCosts(result, payload) {
+      const baseRate = parseFloat(document.getElementById('baseHourlyRate').value) || 35.0;
+      const nightBonusPercent = parseFloat(document.getElementById('nightBonusPercent').value) || 20.0;
+      const nightBonusRate = baseRate * (nightBonusPercent / 100.0);
+
+      let totalBaseCost = 0;
+      let totalNightBonusCost = 0;
+      const empBreakdown = [];
+
+      payload.employees.forEach(emp => {
+        let nightHours = 0;
+        const totalHours = result.assigned_hours[`emp_${emp.id}`] || 0;
+
+        result.calendar_dates.forEach((dStr, dIdx) => {
+          const shiftId = result.schedule[`emp_${emp.id}_day_${dIdx}`];
+          if (shiftId !== undefined) {
+            const shiftDef = result.shift_definitions.find(s => s.id === shiftId);
+            // Zmiana nocna: jeśli start >= 20 lub nazwa zawiera 'Noc'
+            if (shiftDef && (shiftDef.name.toLowerCase().includes('noc') || shiftDef.start_hour >= 20)) {
+              nightHours += shiftDef.duration_hours;
+            }
+          }
+        });
+
+        const basePay = totalHours * baseRate;
+        const nightBonus = nightHours * nightBonusRate;
+        const empTotal = basePay + nightBonus;
+
+        totalBaseCost += basePay;
+        totalNightBonusCost += nightBonus;
+
+        empBreakdown.push({
+          name: emp.name || `Pracownik ${emp.id}`,
+          hours: totalHours,
+          nightHours: nightHours,
+          nightBonus: nightBonus,
+          total: empTotal
+        });
+      });
+
+      const grandTotal = totalBaseCost + totalNightBonusCost;
+
+      return {
+        baseRate,
+        totalBaseCost,
+        totalNightBonusCost,
+        grandTotal,
+        empBreakdown
+      };
+    }
+
+    function openCostSummaryModal() {
+      if (!currentResult || !currentPayload) {
+        alert("Najpierw wygeneruj harmonogram, aby obliczyć koszty płac.");
+        return;
+      }
+
+      const costs = calculateCosts(currentResult, currentPayload);
+      document.getElementById('costBaseTotal').textContent = `${costs.totalBaseCost.toFixed(2)} zł`;
+      document.getElementById('costNightTotal').textContent = `${costs.totalNightBonusCost.toFixed(2)} zł`;
+      document.getElementById('costGrandTotal').textContent = `${costs.grandTotal.toFixed(2)} zł`;
+
+      const tbody = document.getElementById('costTableBody');
+      tbody.innerHTML = '';
+      costs.empBreakdown.forEach(row => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-zinc-800/30">
+            <td class="p-2.5 font-semibold text-zinc-200">${row.name}</td>
+            <td class="p-2.5 text-center font-mono">${row.hours} h</td>
+            <td class="p-2.5 text-center font-mono text-emerald-400 font-bold">${row.nightHours} h</td>
+            <td class="p-2.5 text-right font-mono text-zinc-300">${row.nightBonus.toFixed(2)} zł</td>
+            <td class="p-2.5 text-right font-mono font-bold text-emerald-300">${row.total.toFixed(2)} zł</td>
+          </tr>
+        `;
+      });
+
+      document.getElementById('costModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeCostModal() {
+      document.getElementById('costModal').classList.add('hidden');
+    }
+
+    // ================= RĘCZNA KOREKTA GRAFIKU (Manual Override) =================
+    function openCellOverride(empId, dayIdx) {
+      if (!currentResult || !currentPayload) return;
+      overrideTarget = { empId, dayIdx };
+
+      const emp = currentPayload.employees.find(e => e.id === empId);
+      const dateStr = currentResult.calendar_dates[dayIdx];
+      const currentShiftId = currentResult.schedule[`emp_${empId}_day_${dayIdx}`];
+
+      document.getElementById('overrideTargetInfo').innerHTML = `
+        Pracownik: <strong class="text-zinc-200">${emp ? emp.name : empId}</strong><br>
+        Data: <strong class="text-zinc-200">${dateStr} (Dzień ${dayIdx + 1})</strong>
+      `;
+
+      const sel = document.getElementById('overrideShiftSelect');
+      sel.innerHTML = `<option value="-1">Dzień wolny (-)</option>`;
+      currentResult.shift_definitions.forEach(s => {
+        const selected = (currentShiftId === s.id) ? 'selected' : '';
+        sel.innerHTML += `<option value="${s.id}" ${selected}>${s.id}: ${s.name} (${s.duration_hours}h)</option>`;
+      });
+
+      document.getElementById('overrideModal').classList.remove('hidden');
+    }
+
+    function closeOverrideModal() {
+      document.getElementById('overrideModal').classList.add('hidden');
+      overrideTarget = null;
+    }
+
+    function applyCellOverride() {
+      if (!overrideTarget || !currentResult) return;
+      const { empId, dayIdx } = overrideTarget;
+      const val = parseInt(document.getElementById('overrideShiftSelect').value);
+
+      if (val === -1) {
+        delete currentResult.schedule[`emp_${empId}_day_${dayIdx}`];
+      } else {
+        currentResult.schedule[`emp_${empId}_day_${dayIdx}`] = val;
+      }
+
+      // Przelicz godziny per pracownik
+      recalculateAssignedHours();
+      renderSchedule(currentResult, currentPayload);
+      closeOverrideModal();
+    }
+
+    function recalculateAssignedHours() {
+      if (!currentResult || !currentPayload) return;
+      const hoursMap = {};
+      currentPayload.employees.forEach(e => { hoursMap[`emp_${e.id}`] = 0; });
+
+      currentResult.calendar_dates.forEach((dStr, dIdx) => {
+        currentPayload.employees.forEach(e => {
+          const shiftId = currentResult.schedule[`emp_${e.id}_day_${dIdx}`];
+          if (shiftId !== undefined) {
+            const shiftDef = currentResult.shift_definitions.find(s => s.id === shiftId);
+            if (shiftDef) {
+              hoursMap[`emp_${e.id}`] = (hoursMap[`emp_${e.id}`] || 0) + shiftDef.duration_hours;
+            }
+          }
+        });
+      });
+      currentResult.assigned_hours = hoursMap;
+    }
+
+    // ================= RENDEROWANIE TABELI KALENDARZA I COVERAGE =================
+    function renderSchedule(result, payload) {
+      document.getElementById('emptyState').classList.add('hidden');
+      const table = document.getElementById('scheduleTable');
+      table.classList.remove('hidden');
+
+      // 1. Metryki KPI i Kosztorys
+      const costs = calculateCosts(result, payload);
+      document.getElementById('metricsCard').classList.remove('hidden');
+      document.getElementById('metricEngineBadge').textContent = result.solver_name;
+      document.getElementById('metricStatus').textContent = result.status;
+      document.getElementById('metricTime').textContent = `${(result.solve_time_seconds * 1000).toFixed(1)} ms`;
+      document.getElementById('metricNorm').textContent = `${result.calculated_work_norm_hours || '-'} h`;
+      document.getElementById('metricCost').textContent = `${Math.round(costs.grandTotal)} zł`;
+
+      document.getElementById('scheduleSubtitle').textContent = 
+        `Grafik wygenerowany dla ${payload.employees.length} pracowników na okres od ${result.calendar_dates[0]} do ${result.calendar_dates[result.calendar_dates.length - 1]} (${result.calendar_dates.length} dni) | Algorytm: ${result.solver_name}`;
+
+      // 2. Legenda zmian
+      const legendDiv = document.getElementById('shiftLegend');
+      legendDiv.innerHTML = '';
+
+      result.shift_definitions.forEach((s, idx) => {
+        const c = SHIFT_THEMES[idx % SHIFT_THEMES.length];
+        legendDiv.innerHTML += `
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border ${c.bg} ${c.text} ${c.border}">
+            <span class="w-1.5 h-1.5 rounded-full ${c.badge}"></span>
+            ${s.id}: ${s.name}
+          </span>
+        `;
+      });
+      legendDiv.innerHTML += `
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-emerald-950/40 text-emerald-300 border-emerald-700/60">
+          U (Urlop)
+        </span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border bg-rose-950/30 text-rose-300 border-rose-800/60">
+          ZAMKNIĘTE
+        </span>
+      `;
+
+      // 3. Budowa nagłówka tabeli
+      const plDays = ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "Sb"];
+      let html = '<thead><tr class="border-b border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-400 bg-zinc-950/80 sticky top-0 z-20">';
+      html += '<th class="py-3 px-3 font-semibold w-56 sticky left-0 bg-zinc-950 z-30">Pracownik & Rola</th>';
+
+      result.calendar_dates.forEach((dStr) => {
+        const dt = new Date(dStr + "T00:00:00");
+        const wd = plDays[dt.getDay()];
+        const isSun = dt.getDay() === 0;
+        const isSat = dt.getDay() === 6;
+        const isClosed = result.closed_days && result.closed_days.includes(dStr);
+        const isHoliday = result.holidays && result.holidays.includes(dStr);
+
+        let cellBg = '';
+        if (isClosed) cellBg = 'bg-rose-950/30 text-rose-300';
+        else if (isHoliday) cellBg = 'bg-amber-950/30 text-amber-300';
+        else if (isSun) cellBg = 'bg-zinc-850 text-zinc-300';
+        else if (isSat) cellBg = 'bg-zinc-900 text-zinc-400';
+
+        html += `
+          <th class="py-2 px-1 text-center min-w-[42px] border-l border-zinc-800/80 ${cellBg}">
+            <div class="text-[10px] opacity-75 font-medium">${wd}</div>
+            <div class="text-xs font-bold font-mono">${dt.getDate()}</div>
+          </th>
+        `;
+      });
+
+      html += '<th class="py-3 px-3 font-semibold text-center w-28 border-l border-zinc-800">Godziny</th>';
+      html += '<th class="py-3 px-3 font-semibold text-center w-24 border-l border-zinc-800">Bilans KP</th>';
+      html += '</tr></thead>';
+
+      // 4. Wiersze pracowników
+      html += '<tbody class="divide-y divide-zinc-800/60">';
+
+      payload.employees.forEach((emp) => {
+        const assignedH = result.assigned_hours[`emp_${emp.id}`] || 0;
+        const baseNorm = result.calculated_work_norm_hours || 0;
+        const empNorm = Math.floor(baseNorm * emp.contract_fte);
+        const diff = assignedH - empNorm;
+
+        html += '<tr class="hover:bg-zinc-850/40 transition-colors group">';
+        
+        // Kolumna Pracownika (sticky z lewej)
+        html += `
+          <td class="py-2.5 px-3 sticky left-0 bg-zinc-900 group-hover:bg-zinc-850 z-10 border-r border-zinc-800/80">
+            <div class="font-semibold text-zinc-200 text-xs">${emp.name || `Pracownik ${emp.id}`}</div>
+            <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span class="text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.2 rounded border border-zinc-700 font-mono">FTE: ${emp.contract_fte}</span>
+              ${(emp.skills || []).map(s => `<span class="text-[10px] bg-emerald-950/60 text-emerald-400 px-1.5 py-0.2 rounded border border-emerald-800/50">${s}</span>`).join('')}
+              ${(emp.disallowed_shift_ids || []).length > 0 ? `<span class="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.2 rounded border border-zinc-700">🚫 noce</span>` : ''}
+            </div>
+          </td>
+        `;
+
+        // Komórki dni (kliknięcie wywołuje ręczną modyfikację)
+        result.calendar_dates.forEach((dStr, dIdx) => {
+          const shiftId = result.schedule[`emp_${emp.id}_day_${dIdx}`];
+          const isVacation = emp.vacation_days && emp.vacation_days.includes(dStr);
+          const isClosed = result.closed_days && result.closed_days.includes(dStr);
+
+          let content = '<span class="text-zinc-600 font-mono">-</span>';
+          let cellClass = 'text-center border-l border-zinc-800/60 py-2 px-1 cursor-pointer hover:bg-zinc-800/50 transition';
+
+          if (isClosed) {
+            content = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-950/40 text-rose-300 border border-rose-800/60">ZAMK</span>`;
+          } else if (isVacation) {
+            content = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-700/60">U</span>`;
+          } else if (shiftId !== undefined) {
+            const shiftDef = result.shift_definitions.find(s => s.id === shiftId);
+            const c = SHIFT_THEMES[shiftId % SHIFT_THEMES.length];
+            const label = shiftDef ? (shiftDef.name.includes("12h") ? (shiftId === 0 ? "D" : "N") : shiftId) : shiftId;
+            content = `<span title="${shiftDef ? shiftDef.name : ''}" class="inline-block w-7 h-7 leading-7 rounded-lg font-bold text-xs shadow-sm border font-mono ${c.bg} ${c.text} ${c.border}">${label}</span>`;
+          }
+
+          html += `<td class="${cellClass}" onclick="openCellOverride(${emp.id}, ${dIdx})" title="Kliknij, aby zmienić zmianę pracownika">${content}</td>`;
+        });
+
+        // Kolumny podsumowania
+        const percent = empNorm > 0 ? Math.min(100, Math.round((assignedH / empNorm) * 100)) : 100;
+        html += `
+          <td class="py-2.5 px-3 border-l border-zinc-800 text-center">
+            <div class="font-bold text-zinc-200 text-xs font-mono">${assignedH}h <span class="text-[10px] text-zinc-500 font-normal">/ ${empNorm}h</span></div>
+            <div class="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden mt-1.5">
+              <div class="bg-emerald-500 h-full rounded-full" style="width: ${percent}%"></div>
+            </div>
+          </td>
+        `;
+
+        const diffClass = diff === 0 ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/70' : diff > 0 ? 'text-amber-400 bg-amber-950/40 border-amber-800/70' : 'text-zinc-400 bg-zinc-800/60 border-zinc-700';
+        html += `
+          <td class="py-2.5 px-3 border-l border-zinc-800 text-center font-mono">
+            <span class="inline-block px-2 py-0.5 rounded text-xs font-bold border ${diffClass}">
+              ${diff >= 0 ? '+' : ''}${diff}h
+            </span>
+          </td>
+        `;
+
+        html += '</tr>';
+      });
+
+      // 5. WIERSZE OBSADY I ZAPOTRZEBOWANIA (COVERAGE ROWS)
+      result.shift_definitions.forEach((s) => {
+        html += `<tr class="bg-zinc-950/90 text-[11px] font-mono border-t-2 border-zinc-800">`;
+        html += `<td class="py-2 px-3 sticky left-0 bg-zinc-950 z-10 border-r border-zinc-800 text-zinc-400 font-sans font-medium flex items-center justify-between">
+          <span>Obsada: ${s.name}</span>
+          <span class="text-[9px] bg-zinc-800 text-zinc-400 px-1 rounded font-mono">ID ${s.id}</span>
+        </td>`;
+
+        result.calendar_dates.forEach((dStr, dIdx) => {
+          let actualCount = 0;
+          payload.employees.forEach(emp => {
+            if (result.schedule[`emp_${emp.id}_day_${dIdx}`] === s.id) {
+              actualCount++;
+            }
+          });
+
+          const requiredCount = payload.demand[`d${dIdx}_s${s.id}`] !== undefined ? payload.demand[`d${dIdx}_s${s.id}`] : 1;
+          const isClosed = result.closed_days && result.closed_days.includes(dStr);
+
+          let badgeClass = 'text-emerald-400 bg-emerald-950/40 border-emerald-700/50';
+          if (isClosed) {
+            badgeClass = 'text-zinc-500 bg-zinc-900 border-zinc-800';
+          } else if (actualCount < requiredCount) {
+            badgeClass = 'text-rose-400 bg-rose-950/50 border-rose-600/60 font-bold';
+          } else if (actualCount > requiredCount) {
+            badgeClass = 'text-amber-400 bg-amber-950/40 border-amber-600/50';
+          }
+
+          html += `
+            <td class="text-center py-1.5 px-0.5 border-l border-zinc-800/80">
+              <span class="inline-block px-1.5 py-0.5 rounded text-[10px] border ${badgeClass}">
+                ${isClosed ? '0' : `${actualCount}/${requiredCount}`}
+              </span>
+            </td>
+          `;
+        });
+
+        html += `<td class="text-center py-2 px-2 border-l border-zinc-800 text-zinc-500 text-[10px]">-</td>`;
+        html += `<td class="text-center py-2 px-2 border-l border-zinc-800 text-zinc-500 text-[10px]">-</td>`;
+        html += `</tr>`;
+      });
+
+      html += '</tbody>';
+      table.innerHTML = html;
+      lucide.createIcons();
+    }
+
+    // Pobieranie Excela (.xlsx)
+    async function exportToExcel() {
+      if (!currentPayload) return;
+      try {
+        const res = await fetch('/api/export-excel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentPayload)
+        });
+        if (!res.ok) throw new Error("Błąd podczas eksportu do Excela");
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `harmonogram_${currentPayload.start_date}_${currentPayload.end_date}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e) {
+        alert("Nie udało się pobrać pliku: " + e.message);
+      }
+    }
+
+    // Inicjalizacja przy starcie strony
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadPreset('multi_skill');
+    });
+  </script>
+</body>
+</html>

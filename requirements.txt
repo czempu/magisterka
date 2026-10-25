@@ -1,0 +1,8 @@
+ortools
+pyscipopt
+pydantic
+fastapi
+uvicorn
+httpx
+matplotlib
+openpyxl

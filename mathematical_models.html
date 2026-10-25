@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Definicje i Modele Matematyczne - Harmonogramowanie</title>
+  <!-- MathJax do idealnego renderowania wzorów LaTeX -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #24292f;
+      background: #ffffff;
+    }
+    h1 { border-bottom: 2px solid #eaecef; padding-bottom: 10px; }
+    h2 { border-bottom: 1px solid #eaecef; padding-bottom: 8px; margin-top: 30px; }
+    h3 { margin-top: 24px; }
+    ul { padding-left: 25px; }
+    li { margin-bottom: 16px; }
+    code {
+      background: #f6f8fa;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-family: monospace;
+    }
+    .mjx-chtml { font-size: 1.15em !important; }
+    .badge {
+      background: #e1e4e8;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.85em;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Definicje i Podejścia Algorytmiczne</h1>
+
+<p>Model matematyczny opiera się na trójwymiarowej binarnej zmiennej decyzyjnej:</p>
+<p style="text-align: center;">
+  $$x_{e, d, s} \in \{0, 1\}$$
+</p>
+<p>określającej, czy pracownik \(e\) w dniu kalendarzowym \(d\) pracuje na zmianie \(s\).</p>
+
+<hr>
+
+<h2>Porównywane paradygmaty</h2>
+
+<ol>
+  <li><strong>Constraint Programming (CP-SAT - Google OR-Tools)</strong>:
+    <ul>
+      <li>Solver oparty na programowaniu w logice więzów i SAT-solvingu.</li>
+      <li>Doskonale radzi sobie z warunkami logicznymi typu "jeżeli-to" (implikacje) oraz więzami globalnymi (<code>AddAtMostOne</code>, <code>AddExactlyOne</code>).</li>
+      <li>Bardzo oszczędny pamięciowo przy dużej liczbie reguł logicznych.</li>
+    </ul>
+  </li>
+  <li><strong>Mixed-Integer Linear Programming (SCIP / PySCIPOpt)</strong>:
+    <ul>
+      <li>Klasyczny solver algebraiczny oparty na metodzie Branch-and-Cut.</li>
+      <li>Wymaga ścisłej linearyzacji wszystkich warunków logicznych i nierówności algebraicznych.</li>
+      <li>Stanowi klasyczny akademicki punkt odniesienia dla solverów logiki więzów.</li>
+    </ul>
+  </li>
+</ol>
+
+<hr>
+
+<h2>Zestawienie Ograniczeń (Constraints)</h2>
+
+<h3>1. Reguły Twarde (Wymagane do statusu <span class="badge">FEASIBLE</span> / <span class="badge">OPTIMAL</span>):</h3>
+
+<ul>
+  <li>
+    <strong>Minimalna obsada (Demand)</strong>:
+    $$\forall d, s: \sum_{e} x_{e, d, s} = \text{demand}_{d, s}$$
+  </li>
+
+  <li>
+    <strong>Dni zamknięte zakładu (Closed Days)</strong>:
+    $$\forall d \in \text{ClosedDays}, \forall s: \sum_{e} x_{e, d, s} = 0$$
+  </li>
+
+  <li>
+    <strong>Maksymalnie jedna zmiana dziennie</strong>:
+    $$\forall e, d: \sum_{s} x_{e, d, s} \le 1$$
+  </li>
+
+  <li>
+    <strong>Dynamiczny odpoczynek dobowy 11h (art. 132 Kodeksu Pracy)</strong>:<br>
+    Dla każdej pary zmian \((s_1, s_2)\), gdzie czas odpoczynku od końca \(s_1\) do początku \(s_2\) jest mniejszy niż 11h:
+    $$\forall e, d: x_{e, d, s_1} + x_{e, d+1, s_2} \le 1$$
+  </li>
+
+  <li>
+    <strong>Odpoczynek tygodniowy 35h (art. 133 Kodeksu Pracy)</strong>:<br>
+    Minimum 35 godzin odpoczynku w każdym 7-dniowym oknie czasowym (maksymalnie \(K \le 6\) dni pracy z rzędu):
+    $$\forall e, \forall d \in [0, D-7]: \sum_{k=0}^{6} \sum_{s} x_{e, d+k, s} \le K$$
+  </li>
+
+  <li>
+    <strong>Zasada co 4. wolnej niedzieli (art. 151.10 Kodeksu Pracy)</strong>:<br>
+    Dla każdego 4-elementowego okna kolejnych niedziel \(\{\text{sun}_0, \text{sun}_1, \text{sun}_2, \text{sun}_3\}\):
+    $$\forall e: \sum_{k=0}^{3} \sum_{s} x_{e, \text{sun}_k, s} \le 3$$
+  </li>
+
+  <li>
+    <strong>Indywidualna norma czasu pracy (art. 130 KP) i wymiar etatu (FTE)</strong>:
+    $$\forall e: \sum_{d} \sum_{s} (x_{e, d, s} \cdot H_{s}) \le \lfloor \text{NormaKP} \cdot \text{FTE}_e \rfloor$$
+  </li>
+
+  <li>
+    <strong>Zatwierdzone urlopy wypoczynkowe (Vacation Days)</strong>:
+    $$\forall e, \forall d \in \text{Vacation}_e, \forall s: x_{e, d, s} = 0$$
+  </li>
+
+  <li>
+    <strong>Prawne wykluczenia zmian (np. zakaz nocek wg art. 178 § 2 KP)</strong>:
+    $$\forall e, \forall s \in \text{Disallowed}_e, \forall d: x_{e, d, s} = 0$$
+  </li>
+
+  <li>
+    <strong>Minimalna obsada kwalifikacji i stanowisk (Multi-Skill Demand)</strong>:<br>
+    Dla każdej zmiany \((d, s)\) oraz wymaganej umiejętności \(k\) (np. Kierownik, Pierwsza Pomoc):
+    $$\sum_{e \in \text{HasSkill}(k)} x_{e, d, s} \ge \text{demand\_skill}_{d, s, k}$$
+  </li>
+</ul>
+
+<hr>
+
+<h2>2. Reguły Miękkie (Funkcja Celu):</h2>
+
+<ul>
+  <li>
+    <strong>Minimalizacja naruszeń preferencji pracowniczych</strong>:
+    $$\min \sum_{e, d, s} P_{e, d, s} \cdot x_{e, d, s}$$
+    gdzie \(P_{e, d, s}\) oznacza wagę kary za przypisanie pracownika \(e\) do nielubianej zmiany lub w dniu wnioskowanego dnia wolnego.
+  </li>
+
+  <li>
+    <strong>Ergonomia zmianowa (zakaz rotacji wstecznej)</strong>:<br>
+    Kary za niekorzystne fizjologicznie sekwencje zmian (np. Noc \(\to\) Popołudnie).
+  </li>
+
+  <li>
+    <strong>Minimalizacja uciążliwości pracy w niedziele i święta</strong>:<br>
+    Wagi promujące równomierne rozłożenie pracy w dni ustawowo wolne od pracy.
+  </li>
+</ul>
+
+</body>
+</html>

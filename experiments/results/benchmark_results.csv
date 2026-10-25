@@ -1,0 +1,17 @@
+instance_id,category,num_employees,num_days,num_shifts,num_variables,solver,status,solve_time_seconds,peak_memory_mb,objective_value
+Small-1 (5e_7d),Small,5,7,2,70,CP-SAT,OPTIMAL,0.0112,0.05,0.0
+Small-1 (5e_7d),Small,5,7,2,70,SCIP,OPTIMAL,0.0071,0.05,0.0
+Small-2 (7e_7d),Small,7,7,3,147,CP-SAT,OPTIMAL,0.0155,0.06,0.0
+Small-2 (7e_7d),Small,7,7,3,147,SCIP,OPTIMAL,0.0136,0.09,0.0
+Small-3 (10e_14d),Small,10,14,3,420,CP-SAT,OPTIMAL,0.0342,0.1,0.0
+Small-3 (10e_14d),Small,10,14,3,420,SCIP,OPTIMAL,0.0366,0.27,0.0
+Medium-1 (20e_14d),Medium,20,14,3,840,CP-SAT,OPTIMAL,0.0768,0.19,0.0
+Medium-1 (20e_14d),Medium,20,14,3,840,SCIP,OPTIMAL,0.0675,0.6,0.0
+Medium-2 (25e_21d),Medium,25,21,3,1575,CP-SAT,OPTIMAL,0.1263,0.35,0.0
+Medium-2 (25e_21d),Medium,25,21,3,1575,SCIP,OPTIMAL,0.1241,1.1,0.0
+Medium-3 (30e_30d),Medium,30,30,3,2700,CP-SAT,OPTIMAL,0.2167,0.5,0.0
+Medium-3 (30e_30d),Medium,30,30,3,2700,SCIP,OPTIMAL,0.2164,1.78,0.0
+Large-1 (50e_30d),Large,50,30,3,4500,CP-SAT,OPTIMAL,0.4223,0.86,0.0
+Large-1 (50e_30d),Large,50,30,3,4500,SCIP,OPTIMAL,0.3787,2.87,0.0
+Large-2 (75e_30d),Large,75,30,3,6750,CP-SAT,OPTIMAL,0.7346,1.36,0.0
+Large-2 (75e_30d),Large,75,30,3,6750,SCIP,OPTIMAL,0.623,4.77,0.0
