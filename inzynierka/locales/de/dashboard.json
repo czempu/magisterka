@@ -1,0 +1,18 @@
+{
+  "active_employees": "Aktive Mitarbeiter",
+  "loading_chart": "Diagramm wird geladen...",
+  "work_time": "Ihre Arbeitszeit",
+  "status_in_progress": "läuft",
+  "status_inactive": "inaktiv",
+  "loading_state": "Status wird geladen...",
+  "recent_leaves": "Letzte Urlaubsanträge",
+  "no_leaves": "Keine Urlaubsanträge vorhanden.",
+  "status_approved": "genehmigt",
+  "pending_approvals": "Ausstehende Genehmigungen",
+  "pending_approvals_desc": "Ihnen zur Genehmigung zugewiesene Anträge.",
+  "go_to_approvals": "Zu den Genehmigungen",
+  "no_pending_approvals": "Keine ausstehenden Genehmigungen.",
+  "type": "Typ",
+  "range": "Zeitraum",
+  "step": "Schritt"
+}

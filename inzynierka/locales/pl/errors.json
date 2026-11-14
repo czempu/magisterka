@@ -1,0 +1,11 @@
+{
+  "unauthorized": "Brak autoryzacji. Zaloguj się ponownie.",
+  "forbidden": "Brak uprawnień do wykonania tej operacji.",
+  "not_found": "Nie znaleziono żądanego zasobu.",
+  "internal_error": "Wystąpił wewnętrzny błąd serwera.",
+  "bad_request": "Nieprawidłowe dane wejściowe żądania.",
+  "user_already_exists": "Użytkownik o podanym loginie lub adresie e-mail już istnieje.",
+  "user_not_found": "Nie znaleziono użytkownika.",
+  "invalid_id": "Nieprawidłowy identyfikator zasobu.",
+  "schedule_collision": "Istnieje już harmonogram dla pracownika w wybranym przedziale dat."
+}

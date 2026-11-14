@@ -1,0 +1,1312 @@
+{{ define "schedule_user2.html" }}
+{{ template "layout-start" . }}
+
+
+<div class="max-w-7xl mx-auto p-4 md:p-6 space-y-6"
+     x-data="schedule2Page({ userId: 	{{if .TargetUser.ID}}{{ .TargetUser.ID }}{{else}}{{ .User.ID }}{{end}}})"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div>
+      <nav class="text-xs md:text-sm text-gray-500 mb-1">
+        <a href="/app/users" class="hover:text-gray-700" x-text="$store.i18n ? $store.i18n.t('nav.users', 'Użytkownicy') : 'Użytkownicy'">Użytkownicy</a>
+        <span class="mx-1">/</span>
+        <span>{{if .TargetUser.ID}}{{ .TargetUser.ID }}{{else}}{{ .User.ID }}{{end}}</span>
+        <span class="mx-1">/</span>
+        <span x-text="$store.i18n ? $store.i18n.t('nav.schedule', 'Grafik') : 'Grafik'">Grafik</span>
+      </nav>
+
+      <h1 class="text-lg md:text-2xl font-semibold leading-tight" x-text="$store.i18n ? $store.i18n.t('schedule.heading', 'Grafik i rozliczenie czasu pracy') : 'Grafik i rozliczenie czasu pracy'">
+        Grafik i rozliczenie czasu pracy
+      </h1>
+
+      <div class="mt-1 text-xs md:text-sm text-gray-600">
+        <span class="font-medium" x-text="$store.i18n ? $store.i18n.t('schedule.user', 'Użytkownik') + ':' : 'Użytkownik:'">Użytkownik:</span>
+        <span x-text="headerUserLabel()"></span>
+        <span class="text-gray-400">•</span>
+        <span class="font-medium" x-text="$store.i18n ? $store.i18n.t('schedule.month', 'Miesiąc') + ':' : 'Miesiąc:'">Miesiąc:</span>
+        <span x-text="formatMonth()"></span>
+        <span class="text-gray-400">•</span>
+        <span class="font-medium" x-text="$store.i18n ? $store.i18n.t('schedule.range', 'Zakres') + ':' : 'Zakres:'">Zakres:</span>
+        <span x-text="(payload.from_date || '-') + ' – ' + (payload.to_date || '-')"></span>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="flex flex-wrap gap-2">
+      <a class="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-xs md:text-sm"
+         :href="`/app/user/${userId}/schedule/weeks`"
+         x-text="$store.i18n ? $store.i18n.t('schedule.weekly_plan', 'Plan tygodniowy') : 'Plan tygodniowy'">
+        Plan tygodniowy
+      </a>
+
+      <a class="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-xs md:text-sm"
+         :href="`/app/user/${userId}/employment`"
+         x-text="$store.i18n ? $store.i18n.t('schedule.employment', 'Zatrudnienie') : 'Zatrudnienie'">
+        Zatrudnienie
+      </a>
+
+      <a class="px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-xs md:text-sm"
+         :href="`/app/user/${userId}/schedule/overrides`"
+         x-text="$store.i18n ? $store.i18n.t('schedule.overrides', 'Wyjątki') : 'Wyjątki'">
+        Wyjątki
+      </a>
+
+      <button type="button"
+              @click="downloadReportFor(userId)"
+              class="px-3 py-2 rounded-lg bg-black text-white hover:bg-lime-500 text-xs md:text-sm"
+              x-text="$store.i18n ? $store.i18n.t('schedule.generate_pdf', 'Pobierz raport PDF') : 'Pobierz raport PDF'">
+        Pobierz raport PDF
+      </button>
+    </div>
+  </header>
+
+  <!-- ERROR -->
+  <template x-if="error">
+    <div class="p-3 bg-red-50 border border-red-300 rounded-lg text-xs md:text-sm text-red-800" x-text="error"></div>
+  </template>
+
+  <!-- MONTH NAV + KPI -->
+  <section class="bg-white rounded-2xl shadow-sm border p-4 md:p-5 space-y-4">
+    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+      <!-- NAV -->
+      <div class="flex items-center justify-between sm:justify-start gap-3">
+        <button @click="prevMonth()"
+                class="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm"
+                title="Poprzedni miesiąc">
+          &lt;
+        </button>
+
+        <div class="min-w-[240px]">
+          <div class="text-xs text-gray-500" x-text="$store.i18n ? $store.i18n.t('schedule.current_month', 'Aktualny miesiąc') : 'Aktualny miesiąc'">Aktualny miesiąc</div>
+          <div class="text-base md:text-lg font-semibold" x-text="formatMonth()"></div>
+          <div class="text-xs text-gray-500">
+            Id: <span class="font-mono" x-text="'#' + (payload.user_id || userId)"></span>
+          </div>
+        </div>
+
+        <button @click="nextMonth()"
+                class="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm"
+                title="Następny miesiąc">
+          &gt;
+        </button>
+      </div>
+
+      <!-- KP QUICK LEGEND (always visible) -->
+      <div class="flex flex-wrap items-center gap-2 text-[11px] md:text-xs text-gray-700">
+        <span class="px-2 py-1 rounded-full border bg-white" x-text="$store.i18n ? $store.i18n.t('schedule.legend_work', '● praca') : '● praca'">● praca</span>
+        <span class="px-2 py-1 rounded-full border bg-white" x-text="$store.i18n ? $store.i18n.t('schedule.legend_sick', '💊 choroba') : '💊 choroba'">💊 choroba</span>
+        <span class="px-2 py-1 rounded-full border bg-white" x-text="$store.i18n ? $store.i18n.t('schedule.legend_leave', '🌴 urlop/nieobecność') : '🌴 urlop/nieobecność'">🌴 urlop/nieobecność</span>
+        <span class="px-2 py-1 rounded-full border bg-white" x-text="$store.i18n ? $store.i18n.t('schedule.legend_rest', '! odpoczynek') : '! odpoczynek'">! odpoczynek</span>
+        <span class="px-2 py-1 rounded-full border bg-white" x-text="$store.i18n ? $store.i18n.t('schedule.legend_late', 'S spóźnienie') : 'S spóźnienie'">S spóźnienie</span>
+        <span class="px-2 py-1 rounded-full border bg-white" x-text="$store.i18n ? $store.i18n.t('schedule.legend_early', 'W wyjście wcześniej') : 'W wyjście wcześniej'">W wyjście wcześniej</span>
+        <span class="px-2 py-1 rounded-full border bg-white" x-text="$store.i18n ? $store.i18n.t('schedule.legend_entries', '↔ wejścia/wyjścia') : '↔ wejścia/wyjścia'">↔ wejścia/wyjścia</span>
+      </div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div class="rounded-2xl border bg-gray-50 p-4">
+        <div class="text-xs text-gray-600" x-text="$store.i18n ? $store.i18n.t('schedule.month_plan', 'Plan miesiąca') : 'Plan miesiąca'">Plan miesiąca</div>
+        <div class="text-xl font-semibold text-gray-900" x-text="hm(payload.totals?.month_plan_minutes)"></div>
+        <div class="text-xs text-gray-500 mt-1" x-text="$store.i18n ? $store.i18n.t('schedule.month_plan_desc', 'Suma minut z grafiku (plan).') : 'Suma minut z grafiku (plan).'">Suma minut z grafiku (plan).</div>
+      </div>
+
+      <div class="rounded-2xl border bg-gray-50 p-4">
+        <div class="text-xs text-gray-600" x-text="$store.i18n ? $store.i18n.t('schedule.month_exec', 'Wykonanie miesiąca') : 'Wykonanie miesiąca'">Wykonanie miesiąca</div>
+        <div class="text-xl font-semibold text-gray-900" x-text="hm(payload.totals?.month_exec_minutes)"></div>
+        <div class="text-xs text-gray-500 mt-1" x-text="$store.i18n ? $store.i18n.t('schedule.month_exec_desc', 'Suma minut pracy z rejestracji.') : 'Suma minut pracy z rejestracji.'">Suma minut pracy z rejestracji.</div>
+      </div>
+
+      <div class="rounded-2xl border bg-gray-50 p-4">
+        <div class="text-xs text-gray-600" x-text="$store.i18n ? $store.i18n.t('schedule.month_target', 'Cel miesiąca') : 'Cel miesiąca'">Cel miesiąca</div>
+        <div class="text-xl font-semibold text-gray-900" x-text="hm(payload.totals?.month_target_minutes)"></div>
+        <div class="text-xs text-gray-500 mt-1" x-text="$store.i18n ? $store.i18n.t('schedule.month_target_desc', 'Norma rozliczeniowa miesiąca.') : 'Norma rozliczeniowa miesiąca.'">Norma rozliczeniowa miesiąca.</div>
+      </div>
+
+      <div class="rounded-2xl border bg-gray-50 p-4">
+        <div class="text-xs text-gray-600" x-text="$store.i18n ? $store.i18n.t('schedule.month_delta', 'Delta (wykonanie - cel)') : 'Delta (wykonanie - cel)'">Delta (wykonanie - cel)</div>
+        <div class="text-xl font-semibold"
+             :class="(payload.totals?.month_exec_minus_target_minutes || 0) < 0 ? 'text-rose-700' : 'text-emerald-700'"
+             x-text="signedHM(payload.totals?.month_exec_minus_target_minutes)">
+        </div>
+        <div class="text-xs text-gray-500 mt-1" x-text="$store.i18n ? $store.i18n.t('schedule.month_delta_desc', 'Bilans uwzględniający ekwiwalent pełnego etatu.') : 'Bilans uwzględniający ekwiwalent pełnego etatu.'">Bilans uwzględniający ekwiwalent pełnego etatu.</div>
+      </div>
+    </div>
+
+    <!-- KP SUMMARY -->
+    <div class="rounded-2xl border p-4 md:p-5">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <div class="text-sm font-semibold text-gray-900" x-text="$store.i18n ? $store.i18n.t('schedule.kp_compliance', 'Zgodność KP (sygnały kontrolne)') : 'Zgodność KP (sygnały kontrolne)'">Zgodność KP (sygnały kontrolne)</div>
+          <div class="text-xs text-gray-600 mt-1" x-text="$store.i18n ? $store.i18n.t('schedule.kp_compliance_desc', 'Odpoczynek, przerwy, spóźnienia, wyjścia wcześniej, rejestracje wejść/wyjść.') : 'Odpoczynek, przerwy, spóźnienia, wyjścia wcześniej, rejestracje wejść/wyjść.'">
+            Odpoczynek, przerwy, spóźnienia, wyjścia wcześniej, rejestracje wejść/wyjść.
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <span class="px-2.5 py-1 rounded-full text-xs border"
+                :class="compliance.restAlerts.length > 0 ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'">
+            <span x-text="$store.i18n ? $store.i18n.t('schedule.rest', 'Odpoczynek') + ':' : 'Odpoczynek:'">Odpoczynek:</span> <span class="font-semibold" x-text="compliance.restAlerts.length"></span>
+          </span>
+		
+          <span class="px-2.5 py-1 rounded-full text-xs border bg-gray-50 border-gray-200 text-gray-800">
+            <span x-text="$store.i18n ? $store.i18n.t('schedule.lateness', 'Spóźnienia') + ':' : 'Spóźnienia:'">Spóźnienia:</span> <span class="font-semibold" x-text="compliance.lateDaysCount"></span>
+          </span>
+
+          <span class="px-2.5 py-1 rounded-full text-xs border bg-gray-50 border-gray-200 text-gray-800">
+            <span x-text="$store.i18n ? $store.i18n.t('schedule.early_leaves', 'Wyjścia wcześniej') + ':' : 'Wyjścia wcześniej:'">Wyjścia wcześniej:</span> <span class="font-semibold" x-text="compliance.earlyDaysCount"></span>
+          </span>
+
+          <span class="px-2.5 py-1 rounded-full text-xs border bg-gray-50 border-gray-200 text-gray-800">
+            <span x-text="$store.i18n ? $store.i18n.t('schedule.entry_days', 'Dni z rejestracjami') + ':' : 'Dni z rejestracjami:'">Dni z rejestracjami:</span> <span class="font-semibold" x-text="compliance.entriesDaysCount"></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TABS -->
+  <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <div class="border-b bg-gray-50">
+      <div class="flex flex-wrap items-center gap-2 px-3 md:px-4 py-2 text-xs md:text-sm">
+        <button class="px-3 py-2 rounded-lg"
+                :class="ui.tab === 'calendar' ? 'bg-white border shadow-sm' : 'hover:bg-white/60'"
+                @click="ui.tab='calendar'"
+                x-text="$store.i18n ? $store.i18n.t('schedule.tab_calendar', 'Kalendarz') : 'Kalendarz'">
+          Kalendarz
+        </button>
+
+        <button class="px-3 py-2 rounded-lg"
+                :class="ui.tab === 'table' ? 'bg-white border shadow-sm' : 'hover:bg-white/60'"
+                @click="ui.tab='table'"
+                x-text="$store.i18n ? $store.i18n.t('schedule.tab_table', 'Tabela') : 'Tabela'">
+          Tabela
+        </button>
+
+        <button class="px-3 py-2 rounded-lg"
+                :class="ui.tab === 'company' ? 'bg-white border shadow-sm' : 'hover:bg-white/60'"
+                @click="setTab('company')"
+                x-text="$store.i18n ? $store.i18n.t('schedule.tab_all_employees', 'Wszyscy pracownicy') : 'Wszyscy pracownicy'">
+          Wszyscy pracownicy
+        </button>
+
+        <button class="px-3 py-2 rounded-lg"
+                :class="ui.tab === 'compliance' ? 'bg-white border shadow-sm' : 'hover:bg-white/60'"
+                @click="ui.tab='compliance'"
+                x-text="$store.i18n ? $store.i18n.t('schedule.tab_kp_alerts', 'Alerty KP') : 'Alerty KP'">
+          Alerty KP
+        </button>
+
+        <div class="ml-auto text-[11px] md:text-xs text-gray-600"
+             x-text="$store.i18n ? $store.i18n.t('schedule.calendar_hint', 'Kliknij dzień, aby zobaczyć szczegóły (w tym wejścia/wyjścia).') : 'Kliknij dzień, aby zobaczyć szczegóły (w tym wejścia/wyjścia).'">
+          Kliknij dzień, aby zobaczyć szczegóły (w tym wejścia/wyjścia).
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CALENDAR -->
+    <template x-if="ui.tab === 'calendar'">
+      <div class="p-3 md:p-4">
+        <div class="grid grid-cols-7 gap-2 text-[10px] md:text-xs text-gray-500 mb-2">
+          <div class="text-center" x-text="$store.i18n ? $store.i18n.t('schedule.dow_short_mon', 'Pon') : 'Pon'">Pon</div>
+          <div class="text-center" x-text="$store.i18n ? $store.i18n.t('schedule.dow_short_tue', 'Wt') : 'Wt'">Wt</div>
+          <div class="text-center" x-text="$store.i18n ? $store.i18n.t('schedule.dow_short_wed', 'Śr') : 'Śr'">Śr</div>
+          <div class="text-center" x-text="$store.i18n ? $store.i18n.t('schedule.dow_short_thu', 'Czw') : 'Czw'">Czw</div>
+          <div class="text-center" x-text="$store.i18n ? $store.i18n.t('schedule.dow_short_fri', 'Pt') : 'Pt'">Pt</div>
+          <div class="text-center" x-text="$store.i18n ? $store.i18n.t('schedule.dow_short_sat', 'Sob') : 'Sob'">Sob</div>
+          <div class="text-center" x-text="$store.i18n ? $store.i18n.t('schedule.dow_short_sun', 'Ndz') : 'Ndz'">Ndz</div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-2">
+          <template x-for="cell in weeksFlat" :key="cell.key">
+            <div>
+              <template x-if="cell.day">
+                <button type="button"
+                        @click="openDay(cell.day)"
+                        class="w-full text-left rounded-xl border p-2 hover:shadow-sm transition"
+                        :class="dayTileClass(cell.day)">
+
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="text-xs md:text-sm font-semibold text-gray-900" x-text="cell.day.dayNum"></div>
+
+                    <!-- KP ICONS -->
+                    <div class="flex items-center gap-1">
+                      <template x-if="(cell.day.work_minutes || 0) > 0">
+                        <span class="text-[10px]" title="Praca zarejestrowana">●</span>
+                      </template>
+
+                      <template x-if="(cell.day.sick_percent_coverage || 0) > 0">
+                        <span class="text-[10px]" title="Chorobowe">💊</span>
+                      </template>
+
+                      <template x-if="(cell.day.leave_credit_minutes || 0) > 0 && (cell.day.sick_percent_coverage || 0) === 0">
+                        <span class="text-[10px]" title="Urlop / nieobecność">🌴</span>
+                      </template>
+
+                      <template x-if="cell.day.rest_alert && cell.day.rest_alert !== 'OK'">
+                        <span class="text-[10px] font-bold text-rose-700" title="Alert odpoczynku">!</span>
+                      </template>
+
+                      <template x-if="isBreakWarning(cell.day)">
+                        <span class="text-[10px] font-bold text-amber-700" title="Ostrzeżenie przerwy">B</span>
+                      </template>
+
+                      <template x-if="(cell.day.late_minutes || 0) > 0">
+                        <span class="text-[10px] font-bold text-amber-700" title="Spóźnienie">S</span>
+                      </template>
+
+                      <template x-if="(cell.day.early_leave_minutes || 0) > 0">
+                        <span class="text-[10px] font-bold text-amber-700" title="Wyjście wcześniej">W</span>
+                      </template>
+
+                      <template x-if="cell.day.entries && cell.day.entries.length">
+                        <span class="text-[10px]" title="Są rejestracje wejść/wyjść">↔</span>
+                      </template>
+                    </div>
+                  </div>
+
+                  <div class="mt-1 space-y-1 text-[11px] md:text-xs">
+                    <div class="text-gray-800">
+                      <span class="text-gray-500">Plan:</span>
+                      <span class="font-medium" x-text="hm(cell.day.plan_minutes)"></span>
+                      <span class="text-gray-400">•</span>
+                      <span class="text-gray-500">Wyk:</span>
+                      <span class="font-medium" x-text="hm(cell.day.work_minutes)"></span>
+                    </div>
+
+                    <div class="text-gray-800">
+                      <span class="text-gray-500">Δ:</span>
+                      <span class="font-semibold"
+                            :class="(cell.day.net_delta_minutes || 0) < 0 ? 'text-rose-700' : 'text-emerald-700'"
+                            x-text="signedHM(cell.day.net_delta_minutes)"></span>
+                    </div>
+
+                    <div class="truncate text-gray-600" :title="cell.day.status || ''" x-text="cell.day.status || '-'"></div>
+
+                    <!-- ENTRIES PREVIEW -->
+                    <template x-if="cell.day.entries && cell.day.entries.length">
+                      <div class="mt-1 space-y-0.5 text-[10px] md:text-[11px] text-purple-900">
+                        <template x-for="(e, idx) in (cell.day.entries.slice(0,2))" :key="(e.start || '') + '-' + (e.end || '') + '-' + idx">
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="font-mono">
+                              <span x-text="fmtHHMM(e.start)"></span>
+                              <span class="text-gray-500">→</span>
+                              <span x-text="fmtHHMM(e.end)"></span>
+                            </div>
+                            <div class="text-[10px] text-gray-600" x-text="e.type || ''"></div>
+                          </div>
+                        </template>
+
+                        <template x-if="cell.day.entries.length > 2">
+                          <div class="text-[10px] text-gray-500">
+                            + <span x-text="cell.day.entries.length - 2"></span> więcej
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </button>
+              </template>
+
+              <template x-if="!cell.day">
+                <div class="h-[96px] md:h-[132px]"></div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <!-- TAB: TABLE -->
+    <template x-if="ui.tab === 'table'">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-[11px] md:text-sm">
+          <thead class="bg-gray-50 text-gray-700">
+            <tr class="border-b">
+              <th class="px-3 py-2 text-left font-semibold">Dzień</th>
+              <th class="px-3 py-2 text-left font-semibold">Status</th>
+              <th class="px-3 py-2 text-left font-semibold">Wejścia / wyjścia</th>
+              <th class="px-3 py-2 text-right font-semibold">Plan</th>
+              <th class="px-3 py-2 text-right font-semibold">Wykonanie</th>
+              <th class="px-3 py-2 text-right font-semibold">Przerwy</th>
+              <th class="px-3 py-2 text-right font-semibold">Noc</th>
+              <th class="px-3 py-2 text-right font-semibold">Spóźnienie</th>
+              <th class="px-3 py-2 text-right font-semibold">Wyjście wcześniej</th>
+              <th class="px-3 py-2 text-right font-semibold">Δ netto</th>
+              <th class="px-3 py-2 text-left font-semibold">Odpoczynek</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="d in days" :key="'row-' + d.day">
+              <tr class="border-b hover:bg-gray-50 cursor-pointer" @click="openDay(d)">
+                <td class="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
+                  <div x-text="d.day"></div>
+                  <div class="text-[10px] md:text-xs text-gray-500" x-text="dowLabel(d)"></div>
+                </td>
+
+                <td class="px-3 py-2 text-gray-700 max-w-[420px] truncate" :title="d.status || ''">
+                  <span x-text="d.status || '-'"></span>
+                  <template x-if="d.holiday_name">
+                    <span class="ml-2 text-[10px] px-2 py-0.5 rounded-full border bg-blue-50 border-blue-200 text-blue-800">
+                      Święto
+                    </span>
+                  </template>
+                </td>
+
+                <!-- ENTRIES CELL -->
+                <td class="px-3 py-2">
+                  <template x-if="d.entries && d.entries.length">
+                    <div class="space-y-0.5">
+                      <template x-for="(e, idx) in d.entries.slice(0,2)" :key="'ent-' + d.day + '-' + idx">
+                        <div class="text-[10px] md:text-xs font-mono text-purple-900">
+                          <span x-text="fmtHHMM(e.start)"></span>
+                          <span class="text-gray-500">→</span>
+                          <span x-text="fmtHHMM(e.end)"></span>
+                          <span class="ml-2 text-[10px] text-gray-500" x-text="e.type || ''"></span>
+                        </div>
+                      </template>
+                      <template x-if="d.entries.length > 2">
+                        <div class="text-[10px] text-gray-500">+ <span x-text="d.entries.length - 2"></span> więcej</div>
+                      </template>
+                    </div>
+                  </template>
+                  <template x-if="!d.entries || !d.entries.length">
+                    <span class="text-xs text-gray-400">—</span>
+                  </template>
+                </td>
+
+                <td class="px-3 py-2 text-right font-mono" x-text="hm(d.plan_minutes)"></td>
+                <td class="px-3 py-2 text-right font-mono" x-text="hm(d.work_minutes)"></td>
+                <td class="px-3 py-2 text-right font-mono" x-text="hm(d.break_minutes)"></td>
+                <td class="px-3 py-2 text-right font-mono" x-text="hm(d.night_minutes)"></td>
+                <td class="px-3 py-2 text-right font-mono" x-text="hm(d.late_minutes)"></td>
+                <td class="px-3 py-2 text-right font-mono" x-text="hm(d.early_leave_minutes)"></td>
+
+                <td class="px-3 py-2 text-right font-mono font-semibold"
+                    :class="(d.net_delta_minutes || 0) < 0 ? 'text-rose-700' : 'text-emerald-700'"
+                    x-text="signedHM(d.net_delta_minutes)">
+                </td>
+
+                <td class="px-3 py-2">
+                  <span class="px-2 py-1 rounded-full text-[10px] border"
+                        :class="d.rest_alert && d.rest_alert !== 'OK' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'"
+                        x-text="d.rest_alert || 'OK'">
+                  </span>
+
+                  <template x-if="isBreakWarning(d)">
+                    <span class="ml-2 px-2 py-1 rounded-full text-[10px] border bg-amber-50 border-amber-200 text-amber-800">
+                      przerwa
+                    </span>
+                  </template>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <!-- TAB: COMPANY (ALL USERS) -->
+    <template x-if="ui.tab === 'company'">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-[10px] md:text-[11px]">
+          <thead class="bg-gray-50 text-gray-700 uppercase">
+            <tr>
+              <th class="sticky left-0 bg-gray-50 z-10 px-2 py-2 text-left font-semibold">
+                Pracownik
+              </th>
+
+              <template x-for="dayNum in company.headerDays" :key="'ch-' + dayNum">
+                <th class="px-1 py-1 text-center font-normal" x-text="dayNum"></th>
+              </template>
+            </tr>
+          </thead>
+
+          <tbody>
+            <template x-if="company.loading">
+              <tr>
+                <td :colspan="company.headerDays.length + 1" class="p-4 text-center text-gray-500">
+                  Ładuję plan pracowniczy...
+                </td>
+              </tr>
+            </template>
+
+            <template x-if="!company.loading && company.users.length === 0">
+              <tr>
+                <td :colspan="company.headerDays.length + 1" class="p-4 text-center text-gray-400">
+                  Brak danych dla tego miesiąca.
+                </td>
+              </tr>
+            </template>
+
+            <template x-for="row in company.users" :key="'u-' + row.userId">
+              <tr class="border-t">
+                <!-- LEFT: USER -->
+                <td class="sticky left-0 bg-white z-10 px-2 py-2 align-top min-w-[240px]">
+                  <div class="flex flex-col gap-2">
+                    <div class="leading-tight">
+                      <div class="text-[10px] font-mono text-gray-500" x-text="'#' + row.userId"></div>
+                      <div class="text-[11px] font-semibold text-gray-900" x-text="row.name"></div>
+                    </div>
+
+                    <div class="flex items-center gap-1 text-[10px]">
+                      <a :href="`/app/user/${row.userId}/schedule/weeks`"
+                         class="inline-flex items-center justify-center w-7 h-7 border border-gray-300 rounded-md hover:bg-gray-100"
+                         title="Plan tygodniowy">
+                        <span class="font-semibold">T</span>
+                      </a>
+
+                      <a :href="`/app/user/${row.userId}/employment`"
+                         class="inline-flex items-center justify-center w-7 h-7 border border-gray-300 rounded-md hover:bg-gray-100"
+                         title="Wymiar czasu pracy">
+                        <span class="font-semibold">W</span>
+                      </a>
+
+                      <a :href="`/app/user/${row.userId}/schedule`"
+                         class="inline-flex items-center justify-center w-7 h-7 border border-gray-300 rounded-md hover:bg-gray-100"
+			 title="`Grafik użytkownika ${row.name}`">
+                        <span class="font-semibold">G</span>
+                      </a>
+                      <a :href="`/app/user/${row.userId}/schedule/overrides`"
+                         class="inline-flex items-center justify-center w-7 h-7 border border-gray-300 rounded-md hover:bg-gray-100"
+                         title="Plan dni – wyjątki">
+                        <span class="font-semibold">E</span>
+                      </a>
+                      <button type="button"
+                              @click="downloadReportFor(row.userId)"
+                              class="inline-flex items-center justify-center w-7 h-7 border border-indigo-300 rounded-md hover:bg-indigo-50"
+                              title="Pobierz raport PDF">
+                        <span class="font-semibold">R</span>
+                      </button>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- DAYS -->
+                <template x-for="dayNum in company.headerDays" :key="'d-' + row.userId + '-' + dayNum">
+                  <td class="w-6 h-6 px-0.5 py-0.5 text-center align-middle">
+                    <template x-if="row.days[dayNum]">
+                      <div class="w-6 h-6 mx-auto rounded flex items-center justify-center border"
+                           :class="row.days[dayNum].cls"
+                           :title="row.days[dayNum].title">
+
+                        <template x-if="row.days[dayNum].isSick">
+                          <span class="text-[9px] leading-none">💊</span>
+                        </template>
+
+                        <template x-if="!row.days[dayNum].isSick && row.days[dayNum].isLeave">
+                          <span class="text-[9px] leading-none">🌴</span>
+                        </template>
+
+                        <template x-if="!row.days[dayNum].isSick && !row.days[dayNum].isLeave && row.days[dayNum].hasWork">
+                          <span class="text-[9px] leading-none">●</span>
+                        </template>
+
+                        <template x-if="row.days[dayNum].restAlert && !row.days[dayNum].isSick && !row.days[dayNum].isLeave">
+                          <span class="text-[9px] leading-none font-bold text-rose-700">!</span>
+                        </template>
+
+                      </div>
+                    </template>
+                  </td>
+                </template>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <!-- TAB: COMPLIANCE -->
+    <template x-if="ui.tab === 'compliance'">
+      <div class="p-3 md:p-4 space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+
+          <div class="rounded-2xl border p-4">
+            <div class="text-sm font-semibold text-gray-900">Alerty odpoczynku</div>
+            <div class="text-xs text-gray-600 mt-1">rest_alert ≠ OK</div>
+
+            <div class="mt-3 space-y-2">
+              <template x-if="compliance.restAlerts.length === 0">
+                <div class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  Brak alertów odpoczynku w tym miesiącu.
+                </div>
+              </template>
+
+              <template x-for="a in compliance.restAlerts" :key="'ra-' + a.day">
+                <button type="button"
+                        class="w-full text-left rounded-xl border p-3 hover:bg-gray-50"
+                        @click="openDay(a)">
+                  <div class="flex items-center justify-between">
+                    <div class="font-medium text-gray-900" x-text="a.day"></div>
+                    <span class="text-xs px-2 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-800"
+                          x-text="a.rest_alert"></span>
+                  </div>
+                  <div class="text-xs text-gray-600 mt-1 truncate" x-text="a.status || '-'"></div>
+                </button>
+              </template>
+            </div>
+          </div>
+
+         <!-- <div class="rounded-2xl border p-4">
+            <div class="text-sm font-semibold text-gray-900">Ostrzeżenia przerw</div>
+
+            <div class="mt-3 space-y-2">
+              <template x-if="compliance.breakWarnings.length === 0">
+                <div class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  Brak ostrzeżeń przerw w tym miesiącu.
+                </div>
+              </template>
+
+              <template x-for="b in compliance.breakWarnings" :key="'bw-' + b.day">
+                <button type="button"
+                        class="w-full text-left rounded-xl border p-3 hover:bg-gray-50"
+                        @click="openDay(b)">
+                  <div class="flex items-center justify-between">
+                    <div class="font-medium text-gray-900" x-text="b.day"></div>
+                    <span class="text-xs px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800">
+                      Przerwa: <span class="font-semibold" x-text="hm(b.break_minutes)"></span>
+                    </span>
+                  </div>
+                  <div class="text-xs text-gray-600 mt-1">
+                    Praca: <span class="font-mono" x-text="hm(b.work_minutes)"></span>
+                  </div>
+                </button>
+              </template>
+            </div>
+	 </div> -->
+
+          <div class="rounded-2xl border p-4">
+            <div class="text-sm font-semibold text-gray-900">Punktualność</div>
+            <div class="text-xs text-gray-600 mt-1">spóźnienia i wyjścia wcześniej</div>
+
+            <div class="mt-3 space-y-2">
+              <template x-if="compliance.punctuality.length === 0">
+                <div class="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">
+                  Brak incydentów punktualności w tym miesiącu.
+                </div>
+              </template>
+
+              <template x-for="p in compliance.punctuality" :key="'pi-' + p.day">
+                <button type="button"
+                        class="w-full text-left rounded-xl border p-3 hover:bg-gray-50"
+                        @click="openDay(p)">
+                  <div class="flex items-center justify-between">
+                    <div class="font-medium text-gray-900" x-text="p.day"></div>
+                    <div class="flex gap-2">
+                      <template x-if="(p.late_minutes||0) > 0">
+                        <span class="text-xs px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800">
+                          spóźn: <span class="font-semibold" x-text="hm(p.late_minutes)"></span>
+                        </span>
+                      </template>
+                      <template x-if="(p.early_leave_minutes||0) > 0">
+                        <span class="text-xs px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800">
+                          wyj: <span class="font-semibold" x-text="hm(p.early_leave_minutes)"></span>
+                        </span>
+                      </template>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-600 mt-1 truncate" x-text="p.status || '-'"></div>
+                </button>
+              </template>
+            </div>
+          </div>
+
+        </div>
+
+
+      </div>
+    </template>
+
+  </section>
+
+  <!-- DAY DETAILS MODAL -->
+  <div x-show="ui.dayModal.open" x-transition
+       class="fixed inset-0 z-50 flex items-end md:items-center justify-center"
+       style="display:none;">
+    <div class="absolute inset-0 bg-black/40" @click="closeDay()"></div>
+
+    <div class="relative w-full md:max-w-3xl bg-white rounded-t-3xl md:rounded-3xl shadow-xl border max-h-[85vh] overflow-auto">
+      <div class="p-4 md:p-6 border-b flex items-start justify-between gap-4">
+        <div>
+          <div class="text-xs text-gray-500">Szczegóły dnia</div>
+          <div class="text-lg md:text-xl font-semibold text-gray-900" x-text="ui.dayModal.day?.day || '-'"></div>
+          <div class="text-xs md:text-sm text-gray-600 mt-1" x-text="ui.dayModal.day?.status || '-'"></div>
+        </div>
+
+        <button class="px-3 py-2 rounded-lg border hover:bg-gray-50 text-sm"
+                @click="closeDay()">
+          Zamknij
+        </button>
+      </div>
+
+      <div class="p-4 md:p-6 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="rounded-2xl border bg-gray-50 p-4">
+            <div class="text-xs text-gray-600">Plan / wymagane</div>
+            <div class="text-base font-semibold text-gray-900">
+              <span x-text="hm(ui.dayModal.day?.plan_minutes)"></span>
+              <span class="text-gray-400">/</span>
+              <span x-text="hm(ui.dayModal.day?.required_minutes)"></span>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              <span x-text="ui.dayModal.day?.plan_type || '-'"></span>,
+              <span x-text="ui.dayModal.day?.schedule_hours || '-'"></span>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border bg-gray-50 p-4">
+            <div class="text-xs text-gray-600">Wykonanie</div>
+            <div class="text-base font-semibold text-gray-900">
+              <span x-text="hm(ui.dayModal.day?.work_minutes)"></span>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+		    <!--Przerwy: <span class="font-mono" x-text="hm(ui.dayModal.day?.break_minutes)"></span>, -->
+              Noc: <span class="font-mono" x-text="hm(ui.dayModal.day?.night_minutes)"></span>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border bg-gray-50 p-4">
+            <div class="text-xs text-gray-600">Bilans dnia</div>
+            <div class="text-base font-semibold"
+                 :class="(ui.dayModal.day?.net_delta_minutes || 0) < 0 ? 'text-rose-700' : 'text-emerald-700'">
+              <span x-text="signedHM(ui.dayModal.day?.net_delta_minutes)"></span>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              Spóźnienie: <span class="font-mono" x-text="hm(ui.dayModal.day?.late_minutes)"></span>,
+              Wyjście wcześniej: <span class="font-mono" x-text="hm(ui.dayModal.day?.early_leave_minutes)"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ENTRIES (IN/OUT) -->
+        <div class="rounded-2xl border p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-semibold text-gray-900">Wejścia / wyjścia</div>
+              <div class="text-xs text-gray-600 mt-1">
+                Źródło: <span class="font-mono">in_out.
+              </div>
+            </div>
+            <div class="text-xs text-gray-500">
+              <template x-if="ui.dayModal.day?.entries && ui.dayModal.day.entries.length">
+                <span>Rejestracji: <span class="font-semibold" x-text="ui.dayModal.day.entries.length"></span></span>
+              </template>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <template x-if="!ui.dayModal.day?.entries || !ui.dayModal.day.entries.length">
+              <div class="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">
+                Brak rejestracji wejść/wyjść dla tego dnia.
+              </div>
+            </template>
+
+            <template x-if="ui.dayModal.day?.entries && ui.dayModal.day.entries.length">
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-[11px] md:text-sm">
+                  <thead class="bg-gray-50 text-gray-700">
+                    <tr class="border-b">
+                      <th class="px-3 py-2 text-left font-semibold">Start</th>
+                      <th class="px-3 py-2 text-left font-semibold">Koniec</th>
+                      <th class="px-3 py-2 text-right font-semibold">Czas</th>
+                      <th class="px-3 py-2 text-left font-semibold">Typ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="(e, idx) in ui.dayModal.day.entries" :key="'modal-ent-' + idx">
+                      <tr class="border-b">
+                        <td class="px-3 py-2 font-mono whitespace-nowrap" x-text="fmtFull(e.start)"></td>
+                        <td class="px-3 py-2 font-mono whitespace-nowrap" x-text="fmtFull(e.end)"></td>
+                        <td class="px-3 py-2 text-right font-mono" x-text="hm(e.duration_minutes)"></td>
+                        <td class="px-3 py-2">
+                          <span class="px-2 py-1 rounded-full text-[10px] border bg-white"
+                                x-text="e.type || 'work'"></span>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border p-4">
+          <div class="text-sm font-semibold text-gray-900 mb-2">KP / niuanse</div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs md:text-sm">
+            <div class="rounded-xl border bg-gray-50 p-3">
+              <div class="font-semibold text-gray-900">Odpoczynek</div>
+              <div class="mt-1">
+                <span class="text-gray-600">Naruszono:</span>
+                <span class="font-mono px-2 py-1 rounded border"
+                      :class="ui.dayModal.day?.rest_alert && ui.dayModal.day?.rest_alert !== 'OK'
+                              ? 'bg-rose-50 border-rose-200 text-rose-800'
+                              : 'bg-emerald-50 border-emerald-200 text-emerald-800'"
+                      x-text="ui.dayModal.day?.rest_alert || 'OK'"></span>
+              </div>
+	      <!--
+              <div class="text-gray-600 mt-2">
+                Przerwy: <span class="font-mono" x-text="hm(ui.dayModal.day?.break_minutes)"></span>
+                <template x-if="isBreakWarning(ui.dayModal.day)">
+                  <span class="ml-2 px-2 py-1 rounded-full text-[10px] border bg-amber-50 border-amber-200 text-amber-800">
+                    ostrzeżenie przerwy
+                  </span>
+                </template>
+              </div>
+	      -->
+            </div>
+
+            <div class="rounded-xl border bg-gray-50 p-3">
+              <div class="font-semibold text-gray-900">Nieobecności</div>
+              <div class="text-gray-600 mt-1">
+                Urlop: <span class="font-mono" x-text="hm(ui.dayModal.day?.leave_minutes_raw)"></span>,
+                Z planu: <span class="font-mono" x-text="hm(ui.dayModal.day?.leave_credit_minutes)"></span>
+              </div>
+              <div class="text-gray-600 mt-1">
+                choroba(%): <span class="font-mono" x-text="ui.dayModal.day?.sick_percent_coverage || 0"></span>
+              </div>
+
+              <template x-if="ui.dayModal.day?.holiday_name">
+                <div class="mt-2 text-blue-900 bg-blue-50 border border-blue-200 rounded-xl p-2">
+                  Święto: <span class="font-semibold" x-text="ui.dayModal.day.holiday_name"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function schedule2Page({ userId }) {
+  return {
+    userId,
+    error: '',
+    month: new Date(),
+
+    payload: {
+      user_id: null,
+      name: '',
+      surname: '',
+      from_date: '',
+      to_date: '',
+      totals: {},
+      days: []
+    },
+
+    days: [],
+    weeksFlat: [],
+
+    company: {
+      loading: false,
+      monthKey: '',
+      headerDays: [],
+      users: [],
+
+      usersIndexLoaded: false,
+      usersIndex: [] // [{id, username, Name, Surname}]
+    },
+
+    ui: {
+      tab: 'calendar',
+      dayModal: { open: false, day: null }
+    },
+
+    compliance: {
+      restAlerts: [],
+      breakWarnings: [],
+      punctuality: [],
+      lateDaysCount: 0,
+      earlyDaysCount: 0,
+      entriesDaysCount: 0
+    },
+
+    async init() {
+      await this.loadUser();
+    },
+
+    setTab(tab) {
+      this.ui.tab = tab;
+      if (tab === 'company') {
+        this.loadCompany();
+      }
+    },
+
+    currentMonthKey() {
+      return (
+        this.month.getFullYear() +
+        '-' +
+        String(this.month.getMonth() + 1).padStart(2, '0')
+      );
+    },
+
+    formatMonth() {
+      const txt = this.month.toLocaleString('pl-PL', { month: 'long', year: 'numeric' });
+      return txt.charAt(0).toUpperCase() + txt.slice(1);
+    },
+
+    headerUserLabel() {
+      const id = this.payload.user_id || this.userId;
+      const n = (this.payload.name || '').trim();
+      const s = (this.payload.surname || '').trim();
+      const full = (n + ' ' + s).trim();
+      return full ? `${full} (#${id})` : `#${id}`;
+    },
+
+    nextMonth() {
+      this.month = new Date(this.month.getFullYear(), this.month.getMonth() + 1, 1);
+      this.loadUser();
+      if (this.ui.tab === 'company') this.loadCompany();
+    },
+
+    prevMonth() {
+      this.month = new Date(this.month.getFullYear(), this.month.getMonth() - 1, 1);
+      this.loadUser();
+      if (this.ui.tab === 'company') this.loadCompany();
+    },
+
+    downloadReportFor(targetUserId) {
+      const ym = this.currentMonthKey();
+      window.location = `/api/schedule/raport/${targetUserId}/${ym}`;
+    },
+
+    // ---- PERMISSIONS helper ----
+    isPermissionDenied(res, json) {
+      if (res && (res.status === 401 || res.status === 403)) return true;
+      const msg = (json && typeof json.error === 'string') ? json.error : '';
+      return /brak\s*uprawnie/i.test(msg);
+    },
+
+    // ---- USER (v2) ----
+    async loadUser() {
+      this.error = '';
+      const ym = this.currentMonthKey();
+
+      try {
+        const res = await fetch(`/api/schedule/2/${this.userId}/${ym}`);
+
+        // Spróbuj czytać JSON nawet dla non-2xx (albo gdy backend zwraca 200 z {"error":...})
+        let json = null;
+        try { json = await res.json(); } catch (_) { json = null; }
+
+        if (this.isPermissionDenied(res, json)) {
+          this.error = (json && json.error) ? json.error : 'Brak uprawnień';
+          this.payload = { user_id: null, name: '', surname: '', from_date: '', to_date: '', totals: {}, days: [] };
+          this.days = [];
+          this.weeksFlat = [];
+          this.compliance = { restAlerts: [], breakWarnings: [], punctuality: [], lateDaysCount: 0, earlyDaysCount: 0, entriesDaysCount: 0 };
+          return;
+        }
+
+        if (!res.ok) throw new Error('Błąd pobierania danych (API v2)');
+
+        const data = json?.data || {};
+        this.payload = data;
+
+        this.days = (data.days || []).map(d => this.normalizeV2Day(d));
+        this.buildCalendar();
+        this.buildCompliance();
+      } catch (e) {
+        this.error = e?.message || 'Nie udało się pobrać danych';
+        this.payload = { user_id: null, name: '', surname: '', from_date: '', to_date: '', totals: {}, days: [] };
+        this.days = [];
+        this.weeksFlat = [];
+        this.compliance = { restAlerts: [], breakWarnings: [], punctuality: [], lateDaysCount: 0, earlyDaysCount: 0, entriesDaysCount: 0 };
+      }
+    },
+
+    normalizeV2Day(d) {
+      const dayNum = d.day ? parseInt(d.day.split('-')[2], 10) : 0;
+
+      // entries z potencjalnych kluczy
+      const rawEntries =
+        d.entries ||
+        d.Entries ||
+        d.time_entries ||
+        d.timeEntries ||
+        d.logs ||
+        [];
+
+      // in_out z API v2
+      const rawInOut =
+        d.in_out ||
+        d.inOut ||
+        d.inouts ||
+        [];
+
+      // normalizuj
+      const normA = this.normalizeEntries(rawEntries);
+      const normB = this.normalizeEntries(rawInOut);
+
+      let entries = [...normA, ...normB];
+
+      // fallback: real_start/real_end (HH:MM)
+      if ((!entries || entries.length === 0) && d.real_start && d.real_end && d.day) {
+        const startTS = `${d.day} ${String(d.real_start).trim()}:00`;
+        const endTS = this.buildEndTsFromRealTimes(d.day, d.real_start, d.real_end);
+        entries = this.normalizeEntries([{ in: startTS, out: endTS }]);
+      }
+
+      // dedupe
+      const seen = new Set();
+      entries = (entries || []).filter(e => {
+        const k = `${e.start || ''}|${e.end || ''}|${e.type || ''}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+
+      return { ...d, dayNum, entries };
+    },
+
+    normalizeEntries(raw) {
+      const arr = Array.isArray(raw) ? raw : [];
+      const out = [];
+
+      arr.forEach((e) => {
+        const start =
+          e.start ||
+          e.start_at ||
+          e.startAt ||
+          e.from ||
+          e.from_at ||
+          e.in ||
+          '';
+
+        const end =
+          e.end ||
+          e.end_at ||
+          e.endAt ||
+          e.to ||
+          e.to_at ||
+          e.out ||
+          '';
+
+        const type =
+          e.type ||
+          e.kind ||
+          e.entry_type ||
+          e.entryType ||
+          'work';
+
+        const duration_minutes = this.diffMinutesSafe(start, end);
+
+        out.push({ start, end, type, duration_minutes });
+      });
+
+      out.sort((a, b) => {
+        const ta = this.parseTS(a.start)?.getTime() || 0;
+        const tb = this.parseTS(b.start)?.getTime() || 0;
+        return ta - tb;
+      });
+
+      return out;
+    },
+
+    buildEndTsFromRealTimes(dayStr, realStartHHMM, realEndHHMM) {
+      const s = String(realStartHHMM || '').trim();
+      const e = String(realEndHHMM || '').trim();
+
+      const toMin = (hhmm) => {
+        const [hh, mm] = hhmm.split(':').map(x => parseInt(x, 10));
+        if (!isFinite(hh) || !isFinite(mm)) return null;
+        return hh * 60 + mm;
+      };
+
+      const sMin = toMin(s);
+      const eMin = toMin(e);
+      if (sMin === null || eMin === null) return `${dayStr} ${e}:00`;
+
+      if (eMin < sMin) {
+        const d = new Date(dayStr + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${e}:00`;
+      }
+
+      return `${dayStr} ${e}:00`;
+    },
+
+    parseTS(ts) {
+      if (!ts || typeof ts !== 'string') return null;
+
+      // normalize: "YYYY-MM-DD HH:MM:SS.ffffff" -> "YYYY-MM-DDTHH:MM:SS.fff"
+      let s = ts.trim().replace(' ', 'T');
+      s = s.replace(/(\.\d{3})\d+/, '$1');  // trim microseconds to millis
+      const d = new Date(s);
+
+      if (!isNaN(d.getTime())) return d;
+
+      // fallback: strip fractional seconds
+      s = s.replace(/\.\d+$/, '');
+      const d2 = new Date(s);
+      if (!isNaN(d2.getTime())) return d2;
+
+      return null;
+    },
+
+    diffMinutesSafe(start, end) {
+      const s = this.parseTS(start);
+      const e = this.parseTS(end);
+      if (!s || !e) return 0;
+      const ms = e.getTime() - s.getTime();
+      if (!isFinite(ms) || ms <= 0) return 0;
+      return Math.round(ms / 60000);
+    },
+
+    fmtHHMM(ts) {
+      const d = this.parseTS(ts);
+      if (!d) return '';
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    },
+
+    fmtFull(ts) {
+      const d = this.parseTS(ts);
+      if (!d) return ts || '';
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+    },
+
+    buildCalendar() {
+      if (!this.days.length) {
+        this.weeksFlat = [];
+        return;
+      }
+
+      const sorted = [...this.days].sort((a, b) => (a.day || '').localeCompare(b.day || ''));
+      const first = sorted[0];
+      const firstWeekday = Math.max(0, (first.dow || 1) - 1); // 0=Mon
+
+      let slots = [];
+      for (let i = 0; i < firstWeekday; i++) slots.push(null);
+      sorted.forEach(d => slots.push(d));
+      while (slots.length % 7 !== 0) slots.push(null);
+
+      this.weeksFlat = slots.map((d, idx) => ({
+        key: (d ? d.day : 'empty') + '-' + idx,
+        day: d
+      }));
+    },
+
+    buildCompliance() {
+      const list = this.days || [];
+      const restAlerts = list.filter(d => d.rest_alert && d.rest_alert !== 'OK');
+      const breakWarnings = list.filter(d => this.isBreakWarning(d));
+      const punctuality = list.filter(d => (d.late_minutes || 0) > 0 || (d.early_leave_minutes || 0) > 0);
+
+      const entriesDaysCount = list.filter(d => d.entries && d.entries.length).length;
+
+      this.compliance.restAlerts = restAlerts;
+      //this.compliance.breakWarnings = breakWarnings;
+      this.compliance.punctuality = punctuality;
+      this.compliance.lateDaysCount = punctuality.filter(d => (d.late_minutes || 0) > 0).length;
+      this.compliance.earlyDaysCount = punctuality.filter(d => (d.early_leave_minutes || 0) > 0).length;
+      this.compliance.entriesDaysCount = entriesDaysCount;
+    },
+
+    // ---- COMPANY (all users) ----
+    async fetchUsersIndex() {
+      if (this.company.usersIndexLoaded && this.company.usersIndex.length) return;
+
+      const res = await fetch('/api/users');
+      if (!res.ok) throw new Error('Błąd pobierania listy użytkowników (/api/users)');
+
+      const json = await res.json();
+      const list = json?.data || [];
+
+      this.company.usersIndex = list.map(u => ({
+        id: u.id,
+        username: u.username || '',
+        Name: u.Name || '',
+        Surname: u.Surname || ''
+      }));
+
+      this.company.usersIndexLoaded = true;
+    },
+
+    async fetchUserMonthly(userId, ym) {
+      // W zakładce "Wszyscy pracownicy" pomijamy użytkowników,
+      // dla których backend zwraca brak uprawnień (403/401 lub {"error":"Brak Uprawnień"}).
+      try {
+        const res = await fetch(`/api/schedule/2/${userId}/${ym}`);
+
+        let json = null;
+        try { json = await res.json(); } catch (_) { json = null; }
+
+        if (this.isPermissionDenied(res, json)) return null;
+        if (!res.ok) return null;
+
+        return json?.data || null;
+      } catch (_) {
+        return null;
+      }
+    },
+
+    async loadCompany() {
+      const ym = this.currentMonthKey();
+      if (this.company.monthKey === ym && this.company.users.length > 0) return;
+
+      this.company.loading = true;
+      this.company.users = [];
+      this.company.headerDays = [];
+      this.company.monthKey = ym;
+
+      try {
+        await this.fetchUsersIndex();
+
+        const daysInMonth = new Date(
+          this.month.getFullYear(),
+          this.month.getMonth() + 1,
+          0
+        ).getDate();
+
+        this.company.headerDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+        const ids = this.company.usersIndex.map(u => u.id);
+
+        const reports = await Promise.all(ids.map(id => this.fetchUserMonthly(id, ym)));
+        const filtered = reports.filter(Boolean);
+
+        this.company.users = this.prepareCompanyFromV2Reports(filtered, ym);
+
+      } catch (e) {
+        this.error = e?.message || 'Błąd pobierania danych (wszyscy pracownicy)';
+        this.company.users = [];
+      } finally {
+        this.company.loading = false;
+      }
+    },
+
+    prepareCompanyFromV2Reports(reports, ym) {
+      const nameById = {};
+      (this.company.usersIndex || []).forEach(u => {
+        const full = `${(u.Name || '').trim()} ${(u.Surname || '').trim()}`.trim();
+        nameById[u.id] = full || (u.username ? u.username : `#${u.id}`);
+      });
+
+      const rows = (reports || []).map(r => {
+        const userId = r.user_id;
+        const fullName = nameById[userId] || `${(r.name||'').trim()} ${(r.surname||'').trim()}`.trim() || `#${userId}`;
+
+        const map = {};
+        (r.days || []).forEach(dd => {
+          if (!dd.day || !dd.day.startsWith(ym)) return;
+          const dayNum = parseInt(dd.day.split('-')[2], 10);
+
+          const hasWork = (dd.work_minutes || 0) > 0;
+          const isSick = (dd.sick_percent_coverage || 0) > 0;
+          const isLeave = !isSick && (dd.leave_credit_minutes || 0) > 0;
+          const isHoliday = !!dd.holiday_name || (typeof dd.status === 'string' && dd.status.startsWith('ŚWIĘTO'));
+          const isWeekend = (dd.dow === 6 || dd.dow === 7);
+          const restAlert = (dd.rest_alert && dd.rest_alert !== 'OK');
+
+          let cls = 'bg-white border-gray-200';
+          if (isSick) cls = 'bg-rose-100 border-rose-200';
+          else if (isLeave) cls = 'bg-rose-100 border-rose-200';
+          else if (restAlert) cls = 'bg-rose-50 border-rose-200';
+          else if (isHoliday) cls = 'bg-blue-100 border-blue-200';
+          else if (hasWork) cls = 'bg-purple-100 border-purple-200';
+          else if ((dd.plan_minutes || 0) > 0) cls = 'bg-emerald-100 border-emerald-200';
+          else if (isWeekend) cls = 'bg-gray-100 border-gray-200';
+
+          const title =
+            `${dd.day} • ${fullName}\n` +
+            `${dd.status || ''}\n` +
+            `Plan: ${this.hm(dd.plan_minutes)} | Wyk: ${this.hm(dd.work_minutes)} | Δ: ${this.signedHM(dd.net_delta_minutes)}`;
+
+          map[dayNum] = {
+            cls,
+            title,
+            hasWork,
+            isSick,
+            isLeave,
+            restAlert
+          };
+        });
+
+        return {
+          userId,
+          name: fullName,
+          days: map
+        };
+      });
+
+      rows.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pl'));
+      return rows;
+    },
+
+    // ---- UI helpers ----
+    dayTileClass(d) {
+      const hasSick = (d.sick_percent_coverage || 0) > 0;
+      const hasLeave = (d.leave_credit_minutes || 0) > 0 && !hasSick;
+      const isHoliday = !!d.holiday_name || (typeof d.status === 'string' && d.status.startsWith('ŚWIĘTO'));
+      const isWeekend = (d.dow === 6 || d.dow === 7);
+      const restAlert = d.rest_alert && d.rest_alert !== 'OK';
+
+      if (hasSick || hasLeave) return 'bg-rose-50 border-rose-200';
+      if (restAlert) return 'bg-rose-50 border-rose-200';
+      if (isHoliday) return 'bg-blue-50 border-blue-200';
+      if (isWeekend) return 'bg-gray-50 border-gray-200';
+      if ((d.plan_minutes || 0) > 0) return 'bg-emerald-50 border-emerald-200';
+      return 'bg-white border-gray-200';
+    },
+
+    openDay(day) {
+      this.ui.dayModal = { open: true, day };
+    },
+
+    closeDay() {
+      this.ui.dayModal = { open: false, day: null };
+    },
+
+    isBreakWarning(d) {
+      const work = d?.work_minutes || 0;
+      const br = d?.break_minutes || 0;
+      return work >= 360 && br < 15;
+    },
+
+    dowLabel(d) {
+      const map = { 1: 'Pon', 2: 'Wt', 3: 'Śr', 4: 'Czw', 5: 'Pt', 6: 'Sob', 7: 'Ndz' };
+      return map[d.dow] || '';
+    },
+
+    hm(minutes) {
+      minutes = Math.round(minutes || 0);
+      const sign = minutes < 0 ? '-' : '';
+      minutes = Math.abs(minutes);
+
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      if (h === 0 && m === 0) return '0m';
+      if (m === 0) return sign + `${h}h`;
+      if (h === 0) return sign + `${m}m`;
+      return sign + `${h}h ${m}m`;
+    },
+
+    signedHM(minutes) {
+      minutes = Math.round(minutes || 0);
+      const sign = minutes > 0 ? '+' : '';
+      return sign + this.hm(minutes);
+    }
+  };
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

@@ -1,0 +1,210 @@
+definitions:
+  internal_interface_http_auth.ErrorResponse:
+    properties:
+      error:
+        example: invalid credentials
+        type: string
+    type: object
+  internal_interface_http_auth.LoginRequest:
+    properties:
+      pass:
+        type: string
+      user:
+        type: string
+    type: object
+  internal_interface_http_auth.LoginResponse:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      expires_in:
+        example: 604800
+        type: integer
+      token_type:
+        example: Bearer
+        type: string
+    type: object
+  internal_interface_http_modules.Module:
+    properties:
+      description:
+        example: użytkownicy
+        type: string
+      id:
+        example: 1
+        type: integer
+      module_name:
+        example: users
+        type: string
+      role:
+        example: test
+        type: string
+    type: object
+  internal_interface_http_modules.ModulesResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_interface_http_modules.Module'
+        type: array
+    type: object
+  internal_interface_http_users.ErrorResponse:
+    properties:
+      error:
+        example: invalid credentials
+        type: string
+    type: object
+  internal_interface_http_users.UserItem:
+    properties:
+      Name:
+        example: Marcel
+        type: string
+      Surname:
+        example: Czempik
+        type: string
+      id:
+        example: 1
+        type: integer
+      username:
+        example: czempu
+        type: string
+    type: object
+  internal_interface_http_users.UsersResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/internal_interface_http_users.UserItem'
+        type: array
+    type: object
+  wtrhub_internal_interface_http_auth.ErrorResponse:
+    properties:
+      error:
+        example: invalid credentials
+        type: string
+    type: object
+  wtrhub_internal_interface_http_auth.LoginRequest:
+    properties:
+      pass:
+        type: string
+      user:
+        type: string
+    type: object
+  wtrhub_internal_interface_http_auth.LoginResponse:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      expires_in:
+        example: 604800
+        type: integer
+      token_type:
+        example: Bearer
+        type: string
+    type: object
+host: www.localhost:8080
+info:
+  contact:
+    email: contact@erpbadger.com
+  description: Documentation of WTRHUB API.
+  title: Work Time Registration HUB API
+  version: "1.0"
+paths:
+  /api/me/modules:
+    get:
+      description: Zwraca moduły przypisane do aktualnie zalogowanego użytkownika.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_interface_http_modules.ModulesResponse'
+      security:
+      - BearerAuth: []
+      summary: Lista modułów użytkownika
+      tags:
+      - Me
+  /api/users:
+    get:
+      description: Zwraca listę użytkowników względem poziomu uprawnień.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_interface_http_users.UsersResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_interface_http_users.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_interface_http_users.ErrorResponse'
+      summary: Users
+      tags:
+      - Users
+  /auth/login/cookie:
+    post:
+      consumes:
+      - application/json
+      description: Zwraca ciasteczko po poprawnej autoryzacji.
+      parameters:
+      - description: Login payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/wtrhub_internal_interface_http_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/wtrhub_internal_interface_http_auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wtrhub_internal_interface_http_auth.ErrorResponse'
+      summary: Login/cookie (issue JWT)
+      tags:
+      - Auth
+  /auth/login/token:
+    post:
+      consumes:
+      - application/json
+      description: Zwraca token dostępu po poprawnej autoryzacji.
+      parameters:
+      - description: Login payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/wtrhub_internal_interface_http_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wtrhub_internal_interface_http_auth.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/wtrhub_internal_interface_http_auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/wtrhub_internal_interface_http_auth.ErrorResponse'
+      summary: Login/token (issue JWT)
+      tags:
+      - Auth
+schemes:
+- https
+- http
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

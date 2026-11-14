@@ -1,0 +1,10 @@
+{
+  "heading": "Logowanie do systemu",
+  "username_placeholder": "Użytkownik / Login",
+  "password_placeholder": "Hasło",
+  "submit": "Zaloguj się",
+  "loading": "Logowanie...",
+  "error_invalid": "Nieprawidłowy login lub hasło",
+  "error_server": "Wystąpił błąd podczas logowania",
+  "back_home": "← Powrót do strony głównej"
+}

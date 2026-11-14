@@ -1,0 +1,441 @@
+{{ define "leave_balance.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-6xl mx-auto p-4 md:p-8 space-y-6 md:space-y-8"
+     x-data="leaveBalancePage()"
+     x-init="init()">
+
+
+
+  <!-- Flash -->
+  <template x-if="flash.text">
+    <div x-transition
+         class="rounded-xl border px-4 py-3 text-xs md:text-sm"
+         :class="flash.ok ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'">
+      <span x-text="flash.text"></span>
+    </div>
+  </template>
+
+  <!-- FILTRY / WYBÓR PRACOWNIKA -->
+  <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-3 md:space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-end">
+      <div class="md:col-span-2">
+        <label class="block text-xs md:text-sm text-gray-700 mb-1">Pracownik</label>
+        <select x-model="filters.employee_id"
+                @change="onChangeEmployee()"
+                class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm">
+          <option value="">— wybierz pracownika —</option>
+          <template x-for="u in users" :key="u.id">
+            <option :value="u.id" x-text="userLabel(u)"></option>
+          </template>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs md:text-sm text-gray-700 mb-1">Typ urlopu (filtr)</label>
+        <select x-model="filters.leave_type"
+                @change="loadBalances()"
+                class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm">
+          <option value="">— wszystkie typy —</option>
+          <template x-for="t in leaveTypesAffectingBalance" :key="t.Code">
+            <option :value="t.Code" x-text="t.Name + ' (' + t.Code + ')'"></option>
+          </template>
+        </select>
+      </div>
+    </div>
+    <p class="text-[11px] md:text-xs text-gray-500">
+      W pierwszej kolejności wybierz pracownika. Typy urlopów filtrowane są do tych, które wpływają na bilans (Affects_balance = 1).
+    </p>
+  </section>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+
+    <!-- LISTA BILANSÓW -->
+    <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-3 md:space-y-4 lg:col-span-2">
+      <header class="flex justify-between items-center">
+        <h2 class="text-base md:text-lg font-semibold text-gray-900">Aktualne bilanse</h2>
+        <button @click="loadBalances()"
+                class="text-xs md:text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">
+          ⟳ Odśwież
+        </button>
+      </header>
+
+      <template x-if="!filters.employee_id">
+        <div class="text-xs md:text-sm text-gray-500">
+          Wybierz pracownika, aby zobaczyć jego bilans urlopów.
+        </div>
+      </template>
+
+      <template x-if="filters.employee_id">
+        <div class="w-full overflow-x-auto">
+          <table class="min-w-full text-xs md:text-sm text-left border-t border-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-3 py-2 whitespace-nowrap">Typ urlopu</th>
+                <th class="px-3 py-2 whitespace-nowrap">Okres (od–do)</th>
+                <th class="px-3 py-2 whitespace-nowrap text-right">Początkowo</th>
+                <th class="px-3 py-2 whitespace-nowrap text-right">Pozostało</th>
+                <th class="px-3 py-2 whitespace-nowrap text-right">Akcje</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-if="balances.length === 0">
+                <tr>
+                  <td colspan="5" class="px-3 py-4 text-center text-gray-500">
+                    Brak zdefiniowanego bilansu urlopów dla tego pracownika.
+                  </td>
+                </tr>
+              </template>
+
+              <template x-for="b in balances" :key="b.id">
+                <tr class="border-b hover:bg-gray-50">
+                  <td class="px-3 py-2">
+                    <div class="font-medium text-gray-900" x-text="leaveTypeLabel(b.leave_type)"></div>
+                    <div class="text-[11px] text-gray-500" x-text="b.leave_type"></div>
+                  </td>
+                  <td class="px-3 py-2 whitespace-nowrap">
+                    <span x-text="b.accrual_date"></span>
+                    <span class="text-gray-400">→</span>
+                    <span x-text="b.expiration_date"></span>
+                  </td>
+                  <td class="px-3 py-2 text-right">
+                    <span x-text="minutesToDaysHours(b.initial_balance_minutes)"></span>
+                  </td>
+                  <td class="px-3 py-2 text-right">
+                    <span x-text="minutesToDaysHours(b.remaining_balance_minutes)"></span>
+                  </td>
+                  <td class="px-3 py-2 text-right space-x-2 whitespace-nowrap">
+                    <button
+                      class="text-xs md:text-sm text-lime-600 hover:underline"
+                      @click="editBalance(b)"
+                    >
+                      Edytuj
+                    </button>
+                    <button
+                      class="text-xs md:text-sm text-red-600 hover:underline"
+                      @click="deleteBalance(b)"
+                    >
+                      Usuń
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+    </section>
+
+    <!-- FORMULARZ DODAWANIA / EDYCJI -->
+    <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-3 md:space-y-4">
+      <header>
+        <h2 class="text-base md:text-lg font-semibold text-gray-900">
+          <span x-text="form.id ? 'Edytuj bilans' : 'Dodaj bilans'"></span>
+        </h2>
+        <p class="text-[11px] md:text-xs text-gray-500">
+          Zdefiniuj okres obowiązywania i pulę urlopową (w minutach). System operuje na minutach,
+          ale w legendzie obok widzisz przelicznik na dni i godziny.
+        </p>
+      </header>
+
+      <form class="space-y-3 md:space-y-4" @submit.prevent="saveBalance()">
+        <!-- Pracownik (readonly, z wyboru powyżej) -->
+        <div>
+          <label class="block text-xs md:text-sm text-gray-700 mb-1">Pracownik</label>
+          <input type="text"
+                 :value="selectedEmployeeLabel()"
+                 class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm bg-gray-50"
+                 readonly>
+        </div>
+
+        <!-- Typ urlopu -->
+        <div>
+          <label class="block text-xs md:text-sm text-gray-700 mb-1">Typ urlopu</label>
+          <select x-model="form.leave_type"
+                  class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm"
+                  required>
+            <option value="">— wybierz typ urlopu —</option>
+            <template x-for="t in leaveTypesAffectingBalance" :key="'form-type-' + t.Code">
+              <option :value="t.Code" x-text="t.Name + ' (' + t.Code + ')'"></option>
+            </template>
+          </select>
+        </div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+  
+  <div>
+    <label class="block text-xs md:text-sm text-gray-700 mb-1">Data nabycia (od)</label>
+    <input 
+      type="date" 
+      x-model="form.accrual_date"
+      style="accent-color: #65a30d;"
+      class="w-full border border-gray-300 px-3 py-2 rounded-lg text-xs md:text-sm 
+             outline-none transition-colors
+             focus:border-lime-500 focus:ring-2 focus:ring-lime-500" 
+      required
+    >
+  </div>
+
+  <div>
+    <label class="block text-xs md:text-sm text-gray-700 mb-1">Data ważności (do)</label>
+    <input 
+      type="date" 
+      x-model="form.expiration_date"
+      style="accent-color: #65a30d;"
+      class="w-full border border-gray-300 px-3 py-2 rounded-lg text-xs md:text-sm 
+             outline-none transition-colors
+             focus:border-lime-500 focus:ring-2 focus:ring-lime-500" 
+      required
+    >
+  </div>
+
+</div>
+        <!-- Pula początkowa i pozostała -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs md:text-sm text-gray-700 mb-1">Początkowy bilans (minuty)</label>
+            <input type="number" min="0" step="1"
+                   x-model.number="form.initial_balance_minutes"
+                   class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm" required>
+            <p class="mt-1 text-[11px] text-gray-500">
+              ~ <span x-text="minutesToDaysHours(form.initial_balance_minutes)"></span>
+            </p>
+          </div>
+          <div>
+            <label class="block text-xs md:text-sm text-gray-700 mb-1">Pozostały bilans (minuty)</label>
+            <input type="number" min="0" step="1"
+                   x-model.number="form.remaining_balance_minutes"
+                   class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm">
+            <p class="mt-1 text-[11px] text-gray-500">
+              ~ <span x-text="minutesToDaysHours(form.remaining_balance_minutes)"></span>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-2 md:gap-3 justify-between items-center pt-2">
+          <button type="submit"
+                  class="w-full md:w-auto px-4 py-2 bg-black text-white rounded-lg text-xs md:text-sm hover:bg-lime-700">
+            <span x-text="form.id ? 'Zapisz zmiany' : 'Dodaj bilans'"></span>
+          </button>
+
+          <button type="button"
+                  x-show="form.id"
+                  @click="resetForm()"
+                  class="w-full md:w-auto px-4 py-2 border border-gray-300 rounded-lg text-xs md:text-sm hover:bg-gray-50">
+            Anuluj edycję
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+
+<script>
+  function leaveBalancePage() {
+    return {
+      users: [],
+      leaveTypes: [],
+      balances: [],
+      flash: { text: '', ok: true },
+
+      filters: {
+        employee_id: '',
+        leave_type: '',
+      },
+
+      form: {
+        id: null,
+        leave_type: '',
+        accrual_date: '',
+        expiration_date: '',
+        initial_balance_minutes: 0,
+        remaining_balance_minutes: 0,
+      },
+
+      async init() {
+        await Promise.all([this.loadUsers(), this.loadLeaveTypes()]);
+      },
+
+      async loadUsers() {
+        try {
+          const res = await fetch('/api/users');
+          const json = await res.json();
+          this.users = json.data || [];
+        } catch (e) {
+          console.error('Błąd ładowania użytkowników', e);
+          this.users = [];
+        }
+      },
+
+      async loadLeaveTypes() {
+        try {
+          const res = await fetch('/api/leave-types');
+          const json = await res.json();
+          this.leaveTypes = json.data || [];
+        } catch (e) {
+          console.error('Błąd ładowania typów urlopów', e);
+          this.leaveTypes = [];
+        }
+      },
+
+      get leaveTypesAffectingBalance() {
+        return (this.leaveTypes || []).filter(t => t.Affects_balance === 1 || t.Affects_balance === "1");
+      },
+
+      userLabel(u) {
+        if (!u) return '';
+        const parts = [];
+        if (u.Name || u.Surname) {
+          parts.push((u.Name || '') + ' ' + (u.Surname || ''));
+        }
+        if (u.username) {
+          parts.push('[' + u.username + ']');
+        }
+        parts.push('#' + u.id);
+        return parts.join(' ');
+      },
+
+      selectedEmployeeLabel() {
+        if (!this.filters.employee_id) return 'Brak wybranego pracownika';
+        const id = Number(this.filters.employee_id);
+        const u = this.users.find(x => x.id === id);
+        return u ? this.userLabel(u) : `Pracownik #${id}`;
+      },
+
+      leaveTypeLabel(code) {
+        const t = (this.leaveTypes || []).find(x => x.Code === code);
+        if (!t) return code || '';
+        return t.Name;
+      },
+
+      minutesToDaysHours(minutes) {
+        const m = Number(minutes) || 0;
+        if (m <= 0) return '0 min';
+        const hours = Math.floor(m / 60);
+        const remM = m % 60;
+        const days = Math.floor(hours / 8); // przyjmujemy nominalny dzień 8h – opiszesz w pracy
+        const remH = hours % 8;
+
+        const parts = [];
+        if (days > 0) parts.push(days + ' d');
+        if (remH > 0) parts.push(remH + ' h');
+        if (remM > 0) parts.push(remM + ' min');
+        return parts.join(' ');
+      },
+
+      async onChangeEmployee() {
+        this.resetForm();
+        await this.loadBalances();
+      },
+
+      async loadBalances() {
+        this.balances = [];
+        if (!this.filters.employee_id) return;
+
+        const params = new URLSearchParams();
+        params.set('employee_id', this.filters.employee_id);
+        if (this.filters.leave_type) {
+          params.set('leave_type', this.filters.leave_type);
+        }
+
+        try {
+          const res = await fetch('/api/leaves/balance?' + params.toString());
+          const json = await res.json();
+          if (json.error) {
+            this.flash = { text: json.error, ok: false };
+            return;
+          }
+          this.balances = json.data || [];
+        } catch (e) {
+          console.error('Błąd ładowania bilansów', e);
+          this.flash = { text: 'Nie udało się załadować bilansu urlopów', ok: false };
+        }
+      },
+
+      editBalance(b) {
+        this.form.id = b.id;
+        this.form.leave_type = b.leave_type;
+        this.form.accrual_date = b.accrual_date;
+        this.form.expiration_date = b.expiration_date;
+        this.form.initial_balance_minutes = b.initial_balance_minutes;
+        this.form.remaining_balance_minutes = b.remaining_balance_minutes;
+      },
+
+      resetForm() {
+        this.form = {
+          id: null,
+          leave_type: '',
+          accrual_date: '',
+          expiration_date: '',
+          initial_balance_minutes: 0,
+          remaining_balance_minutes: 0,
+        };
+      },
+
+      async saveBalance() {
+        if (!this.filters.employee_id) {
+          this.flash = { text: 'Najpierw wybierz pracownika', ok: false };
+          return;
+        }
+
+        const payload = {
+          employee_id: Number(this.filters.employee_id),
+          leave_type: this.form.leave_type,
+          accrual_date: this.form.accrual_date,
+          expiration_date: this.form.expiration_date,
+          initial_balance_minutes: Number(this.form.initial_balance_minutes) || 0,
+          remaining_balance_minutes: Number(this.form.remaining_balance_minutes) || 0,
+        };
+
+        const isEdit = !!this.form.id;
+        const url = isEdit
+          ? '/api/leaves/balance/' + this.form.id
+          : '/api/leaves/balance';
+        const method = isEdit ? 'PUT' : 'POST';
+
+        try {
+          const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const json = await res.json();
+          if (!res.ok || json.error) {
+            this.flash = { text: json.error || 'Błąd zapisu bilansu', ok: false };
+            return;
+          }
+          this.flash = { text: isEdit ? '✅ Zaktualizowano bilans' : '✅ Dodano bilans', ok: true };
+          this.resetForm();
+          await this.loadBalances();
+        } catch (e) {
+          console.error('Błąd zapisu bilansu', e);
+          this.flash = { text: 'Nie udało się zapisać bilansu urlopu', ok: false };
+        }
+      },
+
+      async deleteBalance(b) {
+        if (!confirm('Na pewno usunąć bilans tego urlopu?')) return;
+
+        try {
+          const res = await fetch('/api/leaves/balance/' + b.id, {
+            method: 'DELETE',
+          });
+          const json = await res.json();
+          if (!res.ok || json.error) {
+            this.flash = { text: json.error || 'Błąd usuwania bilansu', ok: false };
+            return;
+          }
+          this.flash = { text: '✅ Usunięto bilans urlopu', ok: true };
+          if (this.form.id === b.id) this.resetForm();
+          await this.loadBalances();
+        } catch (e) {
+          console.error('Błąd usuwania bilansu', e);
+          this.flash = { text: 'Nie udało się usunąć bilansu urlopu', ok: false };
+        }
+      },
+    }
+  }
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

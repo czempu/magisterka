@@ -1,0 +1,365 @@
+{{ define "leavesadd.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-3xl mx-auto p-4 md:p-8 space-y-6"
+     x-data="leaveForm({ userId: {{ .User.ID }} })"
+     x-init="init()">
+
+  <!-- FLASH BAR (zielony/czerwony u góry) -->
+  <div x-show="flash.text" x-transition
+       class="rounded-xl border px-4 py-3 text-xs md:text-sm"
+       :class="flash.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-800'">
+    <span x-text="flash.text"></span>
+  </div>
+
+  <!-- Loader -->
+  <div x-show="loading" class="text-xs md:text-sm text-gray-600">Ładowanie...</div>
+
+  <!-- FORMULARZ WNIOSKU -->
+  <section class="bg-white rounded-xl shadow-sm border p-4 md:p-6 space-y-4">
+    <!-- Typ urlopu -->
+    <div>
+      <label for="leaveTypeCode" class="block text-sm font-medium text-gray-700 mb-1">Typ urlopu</label>
+      <select
+        id="leaveTypeCode"
+        x-model="form.leaveTypeCode"
+        :disabled="loading || rows.length === 0"
+        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
+      >
+        <option value="" disabled>— wybierz —</option>
+        <template x-for="row in rows" :key="row.Code">
+          <option :value="row.Code" x-text="row.Name"></option>
+        </template>
+      </select>
+    </div>
+
+    <!-- Przełącznik: pełne dni / część dnia -->
+    <div class="flex items-start gap-2">
+      <input
+        id="partOfDay"
+        type="checkbox"
+        x-model="form.partOfDay"
+        class="mt-0.5 h-4 w-4 text-black border-gray-300 rounded accent-lime-500"
+      />
+      <div>
+        <label for="partOfDay" class="text-sm text-gray-700 font-medium">
+          Urlop w części dnia (godzinowy)
+        </label>
+        <p class="text-[11px] text-gray-500 mt-0.5">
+          Odznaczone – wniosek o pełne dni (wybierasz tylko daty).
+          Zaznaczone – wybierasz dokładne godziny rozpoczęcia i zakończenia.
+        </p>
+      </div>
+    </div>
+
+    <!-- Daty: pełne dni -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" x-show="!form.partOfDay">
+      <div>
+        <label for="startDay" class="block text-sm font-medium text-gray-700 mb-1">Data od (pełny dzień)</label>
+        <input
+          id="startDay"
+          type="date"
+          x-model="form.startDateDay"
+          :max="form.endDateDay || null"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        />
+      </div>
+
+      <div>
+        <label for="endDay" class="block text-sm font-medium text-gray-700 mb-1">Data do (pełny dzień)</label>
+        <input
+          id="endDay"
+          type="date"
+          x-model="form.endDateDay"
+          :min="form.startDateDay || null"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        />
+      </div>
+    </div>
+
+    <!-- Daty: część dnia -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" x-show="form.partOfDay">
+      <div>
+        <label for="startTime" class="block text-sm font-medium text-gray-700 mb-1">Od (data i godzina)</label>
+        <input
+          id="startTime"
+          type="datetime-local"
+          x-model="form.startDateTime"
+          :max="form.endDateTime || null"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        />
+      </div>
+
+      <div>
+        <label for="endTime" class="block text-sm font-medium text-gray-700 mb-1">Do (data i godzina)</label>
+        <input
+          id="endTime"
+          type="datetime-local"
+          x-model="form.endDateTime"
+          :min="form.startDateTime || null"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+        />
+      </div>
+    </div>
+
+    <!-- Notatka -->
+    <div>
+      <label for="note" class="block text-sm font-medium text-gray-700 mb-1">Notatka (opcjonalne)</label>
+      <textarea
+        id="note"
+        rows="3"
+        x-model="form.note"
+        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+      ></textarea>
+    </div>
+
+    <!-- Akcje -->
+    <div class="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
+      <button
+        type="button"
+        @click="resetAll()"
+        :disabled="loading"
+        class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 w-full sm:w-auto"
+      >
+        Wyczyść
+      </button>
+      <button
+        type="button"
+        @click="submit()"
+        :disabled="!canSubmit || loading"
+        class="px-4 py-2 rounded-lg bg-black text-white text-sm font-medium hover:bg-lime-700 disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
+      >
+        <span x-show="!loading">Wyślij wniosek</span>
+        <span x-show="loading">Wysyłanie…</span>
+      </button>
+    </div>
+  </section>
+
+{{ if (index .PermissionsSet "*:*:org")  }}
+  <!-- Podgląd JSON (dev) -->
+  <section class="bg-white rounded-xl shadow-sm border p-4">
+    <details class="text-sm">
+      <summary class="cursor-pointer text-gray-700">Podgląd payloadu (dev)</summary>
+      <pre class="mt-2 bg-gray-50 p-3 rounded-lg text-xs overflow-auto" x-text="JSON.stringify(buildPayload(), null, 2)"></pre>
+    </details>
+  </section>
+{{ end }}
+
+</div>
+
+<script>
+  // --- utils (cookies + fetch z credentials) ---
+  function getCookie(name) {
+    return document.cookie.split('; ')
+      .find(row => row.startsWith(name + '='))?.split('=')[1];
+  }
+
+  async function apiFetch(url, opts = {}) {
+    return fetch(url, {
+      ...opts,
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCookie('XSRF-TOKEN') || '',
+        ...(opts.headers || {})
+      }
+    });
+  }
+
+  function leaveForm({ userId }) {
+    return {
+      userId: userId || null,
+
+      // ENDPOINTY
+      fetchUrl: '/api/leave-types',
+      postUrl: '/api/request/add',
+      balancesUrl: '/api/leaves/balance',
+
+      // STAN
+      rows: [],
+      balances: [],
+      loading: false,
+
+      flash: { text: '', ok: true },
+
+      form: {
+        leaveTypeCode: '',
+        startDateDay: '',
+        endDateDay: '',
+        startDateTime: '',
+        endDateTime: '',
+        partOfDay: false,
+        reason: '',
+        note: ''
+      },
+
+      // --- FLASH ---
+      setFlash(text, ok = true) {
+        this.flash = { text: text || '', ok: !!ok };
+        if (this.flash.text) {
+          setTimeout(() => {
+            if (this.flash.text === text) this.flash.text = '';
+          }, 5000);
+        }
+      },
+
+      async init() {
+        this.loading = true;
+        try {
+          await Promise.all([
+            this.loadLeaveTypes(),
+            this.loadBalances()
+          ]);
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async loadLeaveTypes() {
+        try {
+          const res = await apiFetch(this.fetchUrl, { method: 'GET' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          this.rows = Array.isArray(data.data) ? data.data : (data.data || data.rows || []);
+        } catch (e) {
+          console.error('Błąd pobierania typów urlopów', e);
+          this.setFlash('Nie udało się pobrać typów urlopów.', false);
+        }
+      },
+
+      async loadBalances() {
+        if (!this.userId) return;
+        try {
+          const url = this.balancesUrl + '?employee_id=' + encodeURIComponent(this.userId);
+          const res = await apiFetch(url, { method: 'GET' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          this.balances = Array.isArray(data.data) ? data.data : (data.data || []);
+        } catch (e) {
+          console.error('Błąd pobierania bilansów urlopów', e);
+          this.balances = [];
+        }
+      },
+
+      get canSubmit() {
+        if (!this.form.leaveTypeCode) return false;
+        if (this.form.partOfDay) {
+          return !!(this.form.startDateTime && this.form.endDateTime);
+        }
+        return !!(this.form.startDateDay && this.form.endDateDay);
+      },
+
+      buildPayload() {
+        let quantity;
+        let unit;
+        let startStr;
+        let endStr;
+
+        if (this.form.partOfDay) {
+          const start = new Date(this.form.startDateTime);
+          const end = new Date(this.form.endDateTime);
+          const diffInMs = end - start;
+          const hours = diffInMs / (1000 * 3600);
+
+          quantity = Math.ceil(hours);
+          unit = 'hour';
+
+          startStr = this.form.startDateTime;
+          endStr = this.form.endDateTime;
+        } else {
+          const start = new Date(this.form.startDateDay + 'T00:00');
+          const end = new Date(this.form.endDateDay + 'T23:59');
+          const diffInMs = end - start;
+          const days = diffInMs / (1000 * 3600 * 24);
+
+          quantity = Math.ceil(days) || 1;
+          unit = 'day';
+
+          startStr = this.form.startDateDay + 'T00:00';
+          endStr = this.form.endDateDay + 'T23:59';
+        }
+
+        return {
+          code: this.form.leaveTypeCode,
+          startDate: startStr,
+          endDate: endStr,
+          quantity: quantity,
+          unit: unit,
+          reason: this.form.reason?.trim() || null,
+          note: this.form.note?.trim() || null
+        };
+      },
+
+      resetFormOnly() {
+        this.form = {
+          leaveTypeCode: '',
+          startDateDay: '',
+          endDateDay: '',
+          startDateTime: '',
+          endDateTime: '',
+          partOfDay: false,
+          reason: '',
+          note: ''
+        };
+      },
+
+      resetAll() {
+        this.resetFormOnly();
+        this.flash = { text: '', ok: true };
+      },
+
+      async submit() {
+        if (!this.canSubmit) return;
+
+        this.loading = true;
+        this.setFlash('', true);
+
+        try {
+          const res = await apiFetch(this.postUrl, {
+            method: 'POST',
+            body: JSON.stringify(this.buildPayload())
+          });
+
+          // zawsze próbuj sparsować JSON
+          let data = null;
+          try { data = await res.json(); } catch (_) { data = null; }
+
+          // KLUCZOWA POPRAWKA:
+          // jeśli backend zwróci { "error": "..." } nawet przy 200, traktuj jako błąd
+          if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+            this.setFlash(data.error, false);
+            return;
+          }
+
+          if (!res.ok) {
+            const msg =
+              (data && typeof data === 'object' && (data.message || data.data)) ? (data.message || data.data) :
+              'Wystąpił błąd podczas wysyłki (HTTP ' + res.status + ').';
+            this.setFlash(msg, false);
+            return;
+          }
+
+          const okMsg =
+            (typeof data?.message === 'string' && data.message) ||
+            (typeof data?.data === 'string' && data.data) ||
+            (typeof data?.status === 'string' && data.status) ||
+            'Wniosek został wysłany.';
+
+          this.setFlash(okMsg, true);
+
+          await this.loadBalances();
+          this.resetFormOnly();
+        } catch (e) {
+          this.setFlash(e?.message || 'Nieznany błąd.', false);
+        } finally {
+          this.loading = false;
+        }
+      }
+    }
+  }
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

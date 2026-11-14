@@ -1,0 +1,10 @@
+{
+  "hero_title": "Arbeitszeiten an einem zentralen Ort erfassen und analysieren",
+  "hero_desc": "System konzipiert für kleine und mittlere Unternehmen. Konform mit gesetzlichen Arbeitszeit- und Ruhezeitregelungen.",
+  "module_schedule_title": "Modul – Dienstplan",
+  "module_schedule_desc": "Dienstpläne verwalten, analysieren und optimieren für effiziente Betriebsabläufe.",
+  "module_org_title": "Modul – Organisation",
+  "module_org_desc": "Unternehmensstrukturen, Abteilungen, Teams und mehrstufige Genehmigungsprozesse abbilden.",
+  "module_api_title": "Modul – Entwickler-API",
+  "module_api_desc": "Moderne, vollständig dokumentierte REST-API-Spezifikation und Swagger für Entwickler."
+}

@@ -1,0 +1,18 @@
+{
+  "active_employees": "Active Employees",
+  "loading_chart": "Loading chart...",
+  "work_time": "Your Working Time",
+  "status_in_progress": "in progress",
+  "status_inactive": "inactive",
+  "loading_state": "Loading state...",
+  "recent_leaves": "Recent Leave Requests",
+  "no_leaves": "No leave requests found.",
+  "status_approved": "approved",
+  "pending_approvals": "Pending Approvals",
+  "pending_approvals_desc": "Upcoming requests assigned to you for approval.",
+  "go_to_approvals": "Go to Leave Approvals",
+  "no_pending_approvals": "No pending approvals.",
+  "type": "Type",
+  "range": "Range",
+  "step": "Step"
+}

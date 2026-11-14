@@ -1,0 +1,77 @@
+{{ define "indevelopment.html" }}
+<!doctype html>
+<html lang="pl" x-data="{ token:'', setAccess(){ if(this.token.trim().length){ document.cookie=`wtrhub_dev=1; Path=/; Max-Age=${60*60*8}`; window.location.href='/' } } }">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+       <title>{{ .Title }}</title>
+  <!-- Tailwind (CDN do podglądu; w prod zbuduj własny CSS) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine do drobnych interakcji (opcjonalne) -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+      @keyframes floaty {
+        0% { transform: translateY(0) translateX(0) scale(1); }
+        50% { transform: translateY(-10px) translateX(5px) scale(1.02); }
+        100% { transform: translateY(0) translateX(0) scale(1); }
+      }
+      @keyframes caret { 50% { opacity: 0; } }
+      @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+      @keyframes spinGradient {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+<link rel="icon" type="image/x-icon" href="/public/lib/img/favicon.png">
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100 relative overflow-hidden">
+    <div class="pointer-events-none absolute -top-24 -left-24 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-3xl animate-[floaty_8s_ease-in-out_infinite]"></div>
+    <div class="pointer-events-none absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-cyan-500/20 blur-3xl animate-[floaty_10s_ease-in-out_infinite]"></div>
+
+    <div class="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+
+    <main class="relative z-10 flex min-h-screen items-center justify-center p-6">
+      <div class="w-full max-w-3xl">
+        <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl overflow-hidden">
+          <div class="flex items-center gap-3 px-6 py-5 border-b border-white/10">
+            <div class="h-10 w-10 rounded-xl bg-white/10 grid place-items-center font-bold">W</div>
+            <div>
+              <h1 class="text-lg font-semibold tracking-tight">ERPBadger</h1>
+              <p class="text-xs text-slate-300/80">Enterprise Resource Planning &amp; Time Hub</p>
+            </div>
+            <div class="ml-auto text-xs px-2 py-1 rounded-full border border-white/10 bg-white/5">DEV MODE</div>
+          </div>
+
+          <div class="p-8 md:p-10">
+            <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight leading-tight">
+              Strona w&nbsp;trakcie <span class="bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-400 via-cyan-300 to-emerald-300">rozwoju</span>
+            </h2>
+            <p class="mt-3 text-slate-300/90 max-w-prose">Aktualnie dopracowujemy kluczowe funkcje systemu ewidencji czasu pracy. Dziękujemy za cierpliwość. Wróć niebawem! 🚧</p>
+
+            <!-- Kręcące się kółko -->
+            <div class="mt-8 flex flex-col items-center gap-2">
+              <div class="h-12 w-12 rounded-full border-4 border-t-transparent border-fuchsia-400 animate-spin"></div>
+              <div class="text-xs text-slate-300/70">Trwa praca nad wdrożeniem...</div>
+            </div>
+
+            <div class="mt-8 rounded-2xl border border-white/10 bg-black/30 p-4 font-mono text-sm text-slate-200">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="h-2 w-2 rounded-full bg-emerald-400"></div>
+                <div class="h-2 w-2 rounded-full bg-amber-400"></div>
+                <div class="h-2 w-2 rounded-full bg-rose-400"></div>
+                <span class="ml-auto text-[10px] text-slate-400">build.log</span>
+              </div>
+              <pre class="whitespace-pre-wrap leading-relaxed">$ deploying ERPBadger...
+• api         [██████████░░] compiling
+• timesheets  [████████░░░░] tests
+• ui          [███████████░] polish
+• analytics   [█████░░░░░░] in progress</pre>
+            </div>
+    <!-- Stopka mini -->
+    <footer class="relative z-10 text-center text-xs text-slate-400 py-6">
+      © <script>document.write(new Date().getFullYear())</script> ERPBadger – Enterprise Resource Planning &amp; Time Hub. Wszystkie prawa zastrzeżone.
+    </footer>
+  </body>
+</html>
+
+{{end}}

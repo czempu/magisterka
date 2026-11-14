@@ -1,0 +1,11 @@
+{
+  "unauthorized": "Unauthorized. Please sign in again.",
+  "forbidden": "Access denied. Insufficient permissions.",
+  "not_found": "The requested resource was not found.",
+  "internal_error": "An internal server error occurred.",
+  "bad_request": "Invalid request parameters.",
+  "user_already_exists": "A user with this username or email already exists.",
+  "user_not_found": "User was not found.",
+  "invalid_id": "Invalid resource identifier.",
+  "schedule_collision": "A schedule collision exists for this employee in the specified date range."
+}

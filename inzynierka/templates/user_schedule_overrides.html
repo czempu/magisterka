@@ -1,0 +1,631 @@
+{{ define "user_schedule_overrides.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-4xl mx-auto p-4 md:p-6 space-y-6"
+     x-data="scheduleOverrides({ userId: {{ .TargetUser.ID }} })"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header>
+    <h1 class="text-lg md:text-xl font-semibold mb-0.5">Wyjątki w grafiku</h1>
+    <p class="hidden sm:block text-xs md:text-sm text-gray-600">
+      Dni różniące się od grafiku tygodniowego (np. dodatkowy dzień wolny, zmiana wymiaru, nocka).
+    </p>
+  </header>
+
+  <!-- ALERTY -->
+  <template x-if="error">
+    <div class="p-3 md:p-4 rounded-xl border border-red-300 bg-red-50 text-xs md:text-sm text-red-800 flex items-start gap-2">
+      <span class="mt-0.5"></span>
+      <span x-text="error"></span>
+    </div>
+  </template>
+  <template x-if="success">
+    <div class="p-3 md:p-4 rounded-xl border border-green-300 bg-green-50 text-xs md:text-sm text-green-800 flex items-start gap-2">
+      <span class="mt-0.5">✔</span>
+      <span x-text="success"></span>
+    </div>
+  </template>
+
+  <!-- LISTA WYJĄTKÓW -->
+  <section class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+    <div class="flex justify-between items-center px-3 md:px-4 py-2 border-b border-gray-100">
+      <div class="flex items-center gap-2">
+        <h2 class="text-sm md:text-base font-semibold">Wyjątki w miesiącu</h2>
+        <span class="text-[11px] md:text-xs text-gray-500" x-text="monthLabel"></span>
+      </div>
+
+      <div class="flex items-center gap-2 text-[11px] md:text-xs">
+        <button type="button"
+                class="px-2 py-1 border border-gray-300 rounded-lg hover:bg-gray-50"
+                @click="changeMonth(-1)">
+          « Poprzedni
+        </button>
+        <button type="button"
+                class="px-2 py-1 border border-gray-300 rounded-lg hover:bg-gray-50"
+                @click="changeMonth(1)">
+          Następny »
+        </button>
+      </div>
+    </div>
+
+    <div class="w-full overflow-x-auto">
+      <table class="min-w-full text-xs md:text-sm">
+        <thead class="bg-gray-50 text-gray-700 uppercase text-[10px] md:text-xs">
+          <tr>
+            <th class="p-2 text-left whitespace-nowrap">Data</th>
+            <th class="p-2 text-left whitespace-nowrap">Wymiar (plan)</th>
+            <th class="p-2 text-left whitespace-nowrap">Tryb</th>
+            <th class="p-2 text-left whitespace-nowrap">Okno czasowe</th>
+            <th class="p-2 text-left whitespace-nowrap">Akcje</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="overrides.length === 0">
+            <tr>
+              <td colspan="5" class="p-4 text-center text-gray-500 text-xs md:text-sm">
+                Brak wyjątków w grafiku dla bieżącego miesiąca.
+              </td>
+            </tr>
+          </template>
+
+          <template x-for="ov in overrides" :key="ov.id">
+            <tr class="border-t hover:bg-gray-50 cursor-pointer"
+                @click="editOverride(ov)">
+              <td class="p-2 whitespace-nowrap">
+                <div class="flex flex-col">
+                  <span class="font-medium" x-text="ov.day"></span>
+                  <span class="text-[11px] text-gray-500" x-text="weekdayName(ov.weekday)"></span>
+                </div>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+                <template x-if="ov.planned_minutes > 0">
+                  <span x-text="formatMinutes(ov.planned_minutes)"></span>
+                </template>
+                <template x-if="ov.planned_minutes === 0">
+                  <span class="text-gray-400 italic">Dzień wolny</span>
+                </template>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] border"
+                      :class="ov.flex ? 'bg-lime-50 text-lime-800 border-lime-200' : 'bg-gray-50 text-gray-700 border-gray-200'">
+                  <span x-text="ov.flex ? 'Flex / okno startu' : 'Sztywne okno'"></span>
+                </span>
+                <template x-if="ov.spans_midnight">
+                  <span class="ml-1 text-[10px] text-gray-500">(przez północ)</span>
+                </template>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+                <template x-if="ov.earliest_start && ov.latest_start">
+                  <div class="flex flex-col">
+                    <span class="text-[11px]">
+                      Start: <span x-text="`${ov.earliest_start} – ${ov.latest_start}`"></span>
+                    </span>
+                    <template x-if="ov.latest_end">
+                      <span class="text-[11px]">
+                        Koniec max: <span x-text="ov.latest_end"></span>
+                      </span>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="!(ov.earliest_start && ov.latest_start)">
+                  <span class="text-gray-400 text-[11px]">wg polityki / kontraktu</span>
+                </template>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+                <div class="flex flex-wrap gap-2">
+                  <button type="button"
+                          class="px-2 py-1 text-[11px] md:text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
+                          @click.stop="editOverride(ov)">
+           {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}         
+  			Edytuj
+  			{{else}}
+  				Podgląd
+  			{{end}}
+                  </button>
+
+{{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+                  <button type="button"
+                          class="px-2 py-1 text-[11px] md:text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
+                          @click.stop="deleteOverride(ov)">
+                    Usuń
+                  </button>
+{{ else }}
+{{ end }}
+
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- FORMULARZ DODAWANIA / EDYCJI WYJĄTKU -->
+  <section class="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 md:p-5 space-y-4">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h2 class="text-sm md:text-base font-semibold">
+          <span x-text="form.id ? 'Edytuj wyjątek' : 'Dodaj wyjątek'"></span>
+        </h2>
+        <p class="text-[11px] md:text-xs text-gray-500">
+          Ustaw plan dla konkretnego dnia: dodatkowy dzień wolny, zmiana wymiaru, nocka itp.
+        </p>
+      </div>
+      <button type="button"
+              class="text-[11px] md:text-xs text-gray-500 hover:text-gray-700"
+              @click="resetForm">
+        Wyczyść formularz
+      </button>
+    </div>
+
+    <form class="space-y-4" @submit.prevent="saveOverride">
+      <!-- Data + dzień roboczy -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+            Data wyjątku
+          </label>
+          <input type="date"
+                 x-model="form.day"
+                 style="accent-color:#65a30d;"
+                 class="w-full border border-gray-300 rounded-lg p-2 text-xs md:text-sm outline-none transition-colors
+                        focus:border-lime-500 focus:ring-2 focus:ring-lime-500" />
+        </div>
+
+        <div class="md:col-span-2 flex items-center md:items-end justify-start md:justify-end">
+          <label class="inline-flex items-center gap-2 text-[11px] md:text-xs text-gray-600">
+            <input type="checkbox"
+                   style="accent-color:#65a30d;"
+                   class="rounded border-gray-300 focus:ring-2 focus:ring-lime-500"
+                   x-model="form.is_working">
+            <span>Praca w tym dniu (odznacz = dzień wolny)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Wymiar / flex / okno -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4"
+           :class="form.is_working ? '' : 'opacity-60 pointer-events-none'">
+
+        <!-- Wymiar dnia -->
+        <div>
+          <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+            Wymiar dnia (plan)
+          </label>
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1">
+              <input type="number" min="0" max="24"
+                     x-model.number="form.hours"
+                     class="w-16 border border-gray-300 rounded-lg p-1 text-center text-xs md:text-sm outline-none transition-colors
+                            focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                     placeholder="h" />
+              <span class="text-[11px] text-gray-500">h</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <input type="number" min="0" max="59"
+                     x-model.number="form.minutes"
+                     class="w-16 border border-gray-300 rounded-lg p-1 text-center text-xs md:text-sm outline-none transition-colors
+                            focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                     placeholder="min" />
+              <span class="text-[11px] text-gray-500">min</span>
+            </div>
+          </div>
+          <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+            Planowany wymiar pracy w tym dniu (zastępuje grafik tygodniowy).
+          </p>
+        </div>
+
+        <!-- Tryb: flex vs sztywne -->
+        <div>
+          <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+            Tryb dnia
+          </label>
+          <label class="inline-flex items-center gap-2 text-[11px] md:text-xs text-gray-600">
+            <input type="checkbox"
+                   style="accent-color:#65a30d;"
+                   class="rounded border-gray-300 focus:ring-2 focus:ring-lime-500"
+                   x-model="form.flex">
+            <span>Dzień elastyczny (okno startu, latest end)</span>
+          </label>
+          <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+            Odznacz, jeżeli chcesz bardzo sztywne godziny dla tego dnia.
+          </p>
+        </div>
+
+        <!-- Okno czasowe -->
+        <div>
+          <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+            Okno czasu pracy (opcjonalnie)
+          </label>
+
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2">
+              <span class="w-16 text-[11px] text-gray-500">Start</span>
+              <div class="flex items-center gap-1">
+                <input type="number" min="0" max="23"
+                       x-model.number="form.earliest_start_hour"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                              focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                       placeholder="od hh" />
+                <span class="text-[11px] text-gray-500">:</span>
+                <input type="number" min="0" max="59"
+                       x-model.number="form.earliest_start_minute"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                              focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                       placeholder="mm" />
+              </div>
+              <span class="text-[11px] text-gray-400">–</span>
+              <div class="flex items-center gap-1">
+                <input type="number" min="0" max="23"
+                       x-model.number="form.latest_start_hour"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                              focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                       placeholder="do hh" />
+                <span class="text-[11px] text-gray-500">:</span>
+                <input type="number" min="0" max="59"
+                       x-model.number="form.latest_start_minute"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                              focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                       placeholder="mm" />
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="w-16 text-[11px] text-gray-500">Koniec max</span>
+              <div class="flex items-center gap-1">
+                <input type="number" min="0" max="23"
+                       x-model.number="form.latest_end_hour"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                              focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                       placeholder="hh" />
+                <span class="text-[11px] text-gray-500">:</span>
+                <input type="number" min="0" max="59"
+                       x-model.number="form.latest_end_minute"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                              focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                       placeholder="mm" />
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-2 flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 text-[11px] md:text-xs text-gray-600">
+              <input type="checkbox"
+                     style="accent-color:#65a30d;"
+                     class="rounded border-gray-300 focus:ring-2 focus:ring-lime-500"
+                     x-model="form.spans_midnight"
+                     :disabled="!form.is_working">
+              <span>Zmiana przechodzi przez północ</span>
+            </label>
+          </div>
+
+          <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+            Jeżeli nie podasz okna czasowego, system użyje godzin z polityki firmowej / kontraktu.
+          </p>
+        </div>
+      </div>
+
+      <!-- AKCJE -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
+        <div class="text-[11px] md:text-xs text-gray-500">
+          <template x-if="form.is_working">
+            <span>
+              Suma dnia: <span class="font-medium text-gray-700" x-text="formatMinutes(form.plannedMinutes())"></span>
+            </span>
+          </template>
+          <template x-if="!form.is_working">
+            <span>Dzień będzie traktowany jako wolny (plan = 0 min).</span>
+          </template>
+        </div>
+
+        <div class="flex gap-2 w-full sm:w-auto">
+
+         {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}    
+          <button type="submit"
+                  class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 bg-black text-white rounded-lg hover:bg-lime-700 text-xs md:text-sm">
+            Zapisz wyjątek
+          </button>
+	    {{else}}
+				Brak Uprawnień do Zapisu
+			{{end}}
+
+        </div>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+function scheduleOverrides({ userId }) {
+  return {
+    userId,
+    month: '',
+    monthLabel: '',
+    overrides: [],
+    error: null,
+    success: null,
+
+    form: {
+      id: null,
+      day: '',
+      is_working: true,
+      hours: 8,
+      minutes: 0,
+      flex: true,
+      earliest_start_hour: null,
+      earliest_start_minute: null,
+      latest_start_hour: null,
+      latest_start_minute: null,
+      latest_end_hour: null,
+      latest_end_minute: null,
+      spans_midnight: false,
+
+      plannedMinutes() {
+        if (!this.is_working) return 0;
+        const h = Number(this.hours) || 0;
+        const m = Number(this.minutes) || 0;
+        return (h * 60) + m;
+      }
+    },
+
+    pad2(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return '00';
+      return String(v).padStart(2, '0');
+    },
+
+    formatMinutes(total) {
+      const t = Number(total) || 0;
+      const h = Math.floor(t / 60);
+      const m = t % 60;
+      return `${h} h ${m} min`;
+    },
+
+    weekdayName(dow) {
+      const map = {
+        1: 'Poniedziałek',
+        2: 'Wtorek',
+        3: 'Środa',
+        4: 'Czwartek',
+        5: 'Piątek',
+        6: 'Sobota',
+        7: 'Niedziela'
+      };
+      return map[dow] || '';
+    },
+
+    currentMonthISO() {
+      const urlMonth = new URLSearchParams(window.location.search).get('month');
+      if (urlMonth) return urlMonth;
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = this.pad2(now.getMonth() + 1);
+      return `${y}-${m}`;
+    },
+
+    updateMonthLabel() {
+      if (!this.month) return;
+      const [y, m] = this.month.split('-');
+      const names = ['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
+      const idx = parseInt(m, 10) - 1;
+      this.monthLabel = `${names[idx] || ''} ${y}`;
+    },
+
+    changeMonth(delta) {
+      if (!this.month) return;
+      const [y, m] = this.month.split('-').map(Number);
+      const date = new Date(y, m - 1 + delta, 1);
+      const ny = date.getFullYear();
+      const nm = this.pad2(date.getMonth() + 1);
+      this.month = `${ny}-${nm}`;
+      this.updateMonthLabel();
+      this.loadOverrides();
+    },
+
+    resetForm() {
+      this.error = null;
+      this.success = null;
+      this.form.id = null;
+      this.form.day = '';
+      this.form.is_working = true;
+      this.form.hours = 8;
+      this.form.minutes = 0;
+      this.form.flex = true;
+      this.form.earliest_start_hour = null;
+      this.form.earliest_start_minute = null;
+      this.form.latest_start_hour = null;
+      this.form.latest_start_minute = null;
+      this.form.latest_end_hour = null;
+      this.form.latest_end_minute = null;
+      this.form.spans_midnight = false;
+    },
+
+    editOverride(ov) {
+      this.error = null;
+      this.success = null;
+
+      this.form.id = ov.id;
+      this.form.day = ov.day;
+      this.form.is_working = ov.planned_minutes > 0;
+
+      this.form.hours = Math.floor((ov.planned_minutes || 0) / 60);
+      this.form.minutes = (ov.planned_minutes || 0) % 60;
+      this.form.flex = !!ov.flex;
+      this.form.spans_midnight = !!ov.spans_midnight;
+
+      if (ov.earliest_start) {
+        const [h, m] = ov.earliest_start.split(':');
+        this.form.earliest_start_hour = Number(h);
+        this.form.earliest_start_minute = Number(m);
+      } else {
+        this.form.earliest_start_hour = null;
+        this.form.earliest_start_minute = null;
+      }
+
+      if (ov.latest_start) {
+        const [h, m] = ov.latest_start.split(':');
+        this.form.latest_start_hour = Number(h);
+        this.form.latest_start_minute = Number(m);
+      } else {
+        this.form.latest_start_hour = null;
+        this.form.latest_start_minute = null;
+      }
+
+      if (ov.latest_end) {
+        const [h, m] = ov.latest_end.split(':');
+        this.form.latest_end_hour = Number(h);
+        this.form.latest_end_minute = Number(m);
+      } else {
+        this.form.latest_end_hour = null;
+        this.form.latest_end_minute = null;
+      }
+
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    },
+
+    async loadOverrides() {
+      this.error = null;
+      this.success = null;
+      this.overrides = [];
+
+      try {
+        const url = `/api/user/${this.userId}/schedule/overrides?month=${this.month}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Nie udało się pobrać wyjątków w grafiku');
+        const json = await res.json();
+        const data = json.data || [];
+
+        this.overrides = data.map(o => ({
+          id: o.id,
+          user_id: o.user_id,
+          day: (o.day || '').split('T')[0],
+          weekday: o.weekday || null,
+          planned_minutes: o.planned_minutes || 0,
+          earliest_start: o.earliest_start || null,
+          latest_start: o.latest_start || null,
+          latest_end: o.latest_end || null,
+          flex: !!o.flex,
+          spans_midnight: !!o.spans_midnight,
+        }));
+      } catch (e) {
+        console.error(e);
+        this.error = e.message || 'Błąd pobierania wyjątków';
+      }
+    },
+
+    async saveOverride() {
+      this.error = null;
+      this.success = null;
+
+      if (!this.form.day) {
+        this.error = 'Podaj datę wyjątku.';
+        return;
+      }
+
+      const planned = this.form.plannedMinutes();
+      const isWorking = this.form.is_working;
+
+      const payload = {
+        day: this.form.day,
+        planned_minutes: isWorking ? planned : 0,
+        earliest_start: (this.form.earliest_start_hour != null && this.form.earliest_start_minute != null)
+          ? `${this.pad2(this.form.earliest_start_hour)}:${this.pad2(this.form.earliest_start_minute)}`
+          : null,
+        latest_start: (this.form.latest_start_hour != null && this.form.latest_start_minute != null)
+          ? `${this.pad2(this.form.latest_start_hour)}:${this.pad2(this.form.latest_start_minute)}`
+          : null,
+        latest_end: (this.form.latest_end_hour != null && this.form.latest_end_minute != null)
+          ? `${this.pad2(this.form.latest_end_hour)}:${this.pad2(this.form.latest_end_minute)}`
+          : null,
+        flex: !!this.form.flex,
+        spans_midnight: !!this.form.spans_midnight,
+      };
+
+      try {
+        const url = `/api/user/${this.userId}/schedule/overrides`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        // spójnie: czytamy json i obsługujemy error/message/data
+        let data = null;
+        try { data = await res.json(); } catch (_) { data = null; }
+
+        if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+          this.error = data.error;
+          return;
+        }
+
+        if (!res.ok) {
+          this.error = (data && (data.error || data.message)) ? (data.error || data.message) : 'Nie udało się zapisać wyjątku';
+          return;
+        }
+
+        this.success = (data && (data.message || data.data)) ? (data.message || data.data) : 'Wyjątek zapisany poprawnie.';
+        await this.loadOverrides();
+      } catch (e) {
+        console.error(e);
+        this.error = 'Błąd podczas zapisu wyjątku';
+      }
+    },
+
+    // --- USUWANIE: DELETE /api/overrides/:oid ---
+    async deleteOverride(ov) {
+      const oid = ov?.id;
+      if (!oid) return;
+
+      const label = ov?.day ? ` (${ov.day})` : '';
+      const ok = confirm(`Na pewno usunąć wyjątek${label}?`);
+      if (!ok) return;
+
+      this.error = null;
+      this.success = null;
+
+      try {
+        const res = await fetch(`/api/schedule/overrides/${encodeURIComponent(oid)}`, {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+        });
+
+        let data = null;
+        try { data = await res.json(); } catch (_) { data = null; }
+
+        // bywa, że backend zwraca {error:"..."} nawet przy 200
+        if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+          this.error = data.error;
+          return;
+        }
+
+        if (!res.ok) {
+          this.error = (data && (data.error || data.message)) ? (data.error || data.message) : 'Nie udało się usunąć wyjątku';
+          return;
+        }
+
+        this.success = (data && (data.message || data.data)) ? (data.message || data.data) : 'Wyjątek został usunięty.';
+        // jeśli usuwałeś właśnie edytowany rekord — wyczyść formularz
+        if (Number(this.form.id) === Number(oid)) {
+          this.resetForm();
+        }
+        await this.loadOverrides();
+      } catch (e) {
+        console.error(e);
+        this.error = e?.message || 'Błąd podczas usuwania wyjątku';
+      }
+    },
+
+    init() {
+      this.month = this.currentMonthISO();
+      this.updateMonthLabel();
+      this.loadOverrides();
+    },
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

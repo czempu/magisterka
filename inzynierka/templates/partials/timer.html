@@ -1,0 +1,258 @@
+{{ define "timer.html" }}
+
+
+
+
+
+
+
+
+<!-- Floating Work Timer Widget -->
+<div 
+  x-data="WorkTimer()" 
+  x-init="init()" 
+  class="fixed right-4 bottom-6 sm:right-6 sm:bottom-8 z-50"
+  aria-live="polite"
+>
+  <div class="bg-white shadow-lg rounded-2xl border border-gray-200 p-3 sm:p-4 w-48 sm:w-56">
+    <div class="flex items-center justify-between">
+      <div class="text-xs font-medium text-gray-500">Czas pracy</div>
+      <div x-show="loading" class="text-xs text-gray-400">…</div>
+    </div>
+
+    <!-- GŁÓWNY PRZYCISK -->
+    <div class="mt-2 flex items-center gap-3">
+      <!-- STOP (kwadrat) -->
+      <button
+        x-show="status === 1"
+        @click="stop()"
+        :disabled="actionInProgress"
+        class="flex-shrink-0 w-10 h-10 rounded-lg border border-gray-300 hover:border-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed grid place-items-center"
+        aria-label="Zakończ czas pracy"
+        title="Zakończ"
+      >
+        <!-- Ikona: kwadrat -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+        </svg>
+      </button>
+
+      <!-- START (trójkąt) -->
+      <button
+        x-show="status === 0"
+        @click="start()"
+        :disabled="actionInProgress"
+        class="flex-shrink-0 w-10 h-10 rounded-lg border border-gray-300 hover:border-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed grid place-items-center"
+        aria-label="Rozpocznij czas pracy"
+        title="Start"
+      >
+        <!-- Ikona: trójkąt (play) -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7-11-7z"></path>
+        </svg>
+      </button>
+
+      <!-- LICZNIK -->
+      <div class="flex-1">
+        <div class="text-lg font-semibold tabular-nums" x-text="formattedElapsed"></div>
+        <div class="text-[10px] text-gray-500" x-text="status === 1 ? 'w toku' : 'nieaktywny'"></div>
+      </div>
+    </div>
+
+    <!-- BŁĘDY -->
+    <template x-if="error">
+      <div class="mt-2 text-xs text-red-600" x-text="error"></div>
+    </template>
+  </div>
+</div>
+
+<script>
+  function WorkTimer() {
+    return {
+      // STATE
+      status: 0,            // 0 - nieaktywny, 1 - aktywny
+      startedAt: null,      // Date | null
+      now: Date.now(),
+      loading: true,
+      actionInProgress: false,
+      error: '',
+
+      // TIMERS
+      _tickInterval: null,
+      _statusInterval: null,
+
+      init() {
+        // cyklicznie "tykaj" co 1s
+        this._tickInterval = setInterval(() => {
+          this.now = Date.now();
+        }, 1000);
+
+        // startowy i cykliczny refresh statusu (na wypadek reloadu i zmian z innych zakładek)
+        this.refreshStatus();
+        this._statusInterval = setInterval(() => this.refreshStatus(), 30000); // co 30s
+      },
+
+      async refreshStatus() {
+        try {
+          this.loading = true;
+          this.error = '';
+          const res = await fetch('/api/me/work/status', {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          if (!res.ok) throw new Error('Błąd statusu: ' + res.status);
+
+          const payload = await res.json();
+          const row = Array.isArray(payload?.data) ? payload.data[0] : null;
+
+          const rawStatus = row?.status ?? 0;
+          const rawData = row?.data ?? null;
+
+          this.status = Number(rawStatus) === 1 ? 1 : 0;
+          this.startedAt = this.status === 1 && rawData ? this.parseTimestamp(rawData) : null;
+        } catch (e) {
+          this.error = 'Nie udało się pobrać statusu';
+          console.error(e);
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async start() {
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
+        this.error = '';
+        try {
+          const res = await fetch('/api/me/work/start', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: '{}'
+          });
+          if (!res.ok) {
+            // 409 = już aktywny, itp.
+            const text = await res.text();
+            throw new Error('Start nieudany: ' + (text || res.status));
+          }
+          // Opcjonalnie backend zwraca started_at – użyj go; jeśli nie, użyj czasu klienta
+          let startedAt = null;
+          try {
+            const json = await res.clone().json();
+            startedAt = json?.data?.started_at || json?.started_at || null;
+          } catch (_) { /* no-op if not json */ }
+          this.status = 1;
+          this.startedAt = this.parseTimestamp(startedAt) || new Date();
+        } catch (e) {
+          this.error = 'Nie udało się rozpocząć pracy';
+          console.error(e);
+          // miękki fallback: odśwież status z serwera
+          this.refreshStatus();
+        } finally {
+          this.actionInProgress = false;
+        }
+      },
+
+      async stop() {
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
+        this.error = '';
+        try {
+          const res = await fetch('/api/me/work/stop', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: '{}'
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error('Stop nieudany: ' + (text || res.status));
+          }
+          this.status = 0;
+          this.startedAt = null;
+        } catch (e) {
+          this.error = 'Nie udało się zakończyć pracy';
+          console.error(e);
+          this.refreshStatus();
+        } finally {
+          this.actionInProgress = false;
+        }
+      },
+
+      // LICZENIE I FORMATOWANIE
+      get elapsedSeconds() {
+        if (this.status !== 1 || !this.startedAt) return 0;
+        return Math.max(0, Math.floor((this.now - this.startedAt.getTime()) / 1000));
+      },
+
+      get formattedElapsed() {
+        const s = this.elapsedSeconds;
+        const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+        const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+        const ss = String(s % 60).padStart(2, '0');
+        return `${hh}:${mm}:${ss}`;
+      },
+
+      // Parser akceptujący Twój format "YYYY-MM-DD HH:MM:SS" oraz ISO-8601
+      parseTimestamp(v) {
+        if (!v) return null;
+        // ISO? – pozwól przeglądarce sparsować
+        if (/\dT\d/.test(v)) {
+          const d = new Date(v);
+          return isNaN(d) ? null : d;
+        }
+        // "YYYY-MM-DD HH:MM:SS" → traktuj jako lokalny czas przeglądarki
+        const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(v);
+        if (m) {
+          const [, Y, M, D, h, i, s] = m.map(Number);
+          return new Date(Y, M - 1, D, h, i, s, 0);
+        }
+        // fallback
+        const d = new Date(v);
+        return isNaN(d) ? null : d;
+      },
+
+      // sprzątanie (opcjonalnie, jeśli kiedyś zdejmiesz komponent dynamicznie)
+      destroy() {
+        clearInterval(this._tickInterval);
+        clearInterval(this._statusInterval);
+      }
+    }
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{{ end }}
+

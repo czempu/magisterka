@@ -1,0 +1,10 @@
+{
+  "heading": "Sign in to ERPBadger",
+  "username_placeholder": "Username / Login",
+  "password_placeholder": "Password",
+  "submit": "Sign In",
+  "loading": "Signing in...",
+  "error_invalid": "Invalid username or password",
+  "error_server": "An error occurred during login",
+  "back_home": "← Back to home"
+}

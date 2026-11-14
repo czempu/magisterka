@@ -1,0 +1,21 @@
+{
+  "title": "Kanban-Aufgabenboard",
+  "new_ticket": "Neue Aufgabe",
+  "task_list": "Aufgabenliste",
+  "settlements": "Abrechnungen",
+  "search_placeholder": "Suchen (Titel, Beschreibung)...",
+  "todo": "Zu erledigen",
+  "in_progress": "In Bearbeitung",
+  "done": "Erledigt",
+  "backlog": "Backlog / Ideen",
+  "blocked": "Blockiert",
+  "cancelled": "Abgebrochen",
+  "priority": "Priorität",
+  "priority_low": "Niedrig",
+  "priority_medium": "Mittel",
+  "priority_high": "Hoch",
+  "priority_urgent": "Dringend",
+  "title_placeholder": "Aufgabentitel",
+  "desc_placeholder": "Aufgabenbeschreibung...",
+  "empty_column": "Keine Aufgaben in dieser Spalte"
+}

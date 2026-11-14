@@ -1,0 +1,97 @@
+
+{{ define "login.html" }}
+<!DOCTYPE html>
+<html lang="pl" x-data="{ user: '', pass: '', error: '', loading: false }">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ .Title }}</title>
+	{{ template "lib". }}
+<link rel="icon" type="image/x-icon" href="/public/lib/img/favicon.png">
+</head>
+<body>
+  {{ template "navbar" . }}
+
+  <div class="bg-gray-100 h-screen flex items-center justify-center">
+    <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-md space-y-4" @submit.prevent>
+      <h1 class="text-2xl font-bold" x-text="$store.i18n ? $store.i18n.t('login.heading') : 'Logowanie'">Logowanie</h1>
+
+      <input
+        type="text"
+        :placeholder="$store.i18n ? $store.i18n.t('login.username_placeholder') : 'Użytkownik'"
+        class="w-full p-2 border rounded"
+        x-model="user"
+      />
+
+      <input
+        type="password"
+        :placeholder="$store.i18n ? $store.i18n.t('login.password_placeholder') : 'Hasło'"
+        class="w-full p-2 border rounded"
+        x-model="pass"
+      />
+
+      <button
+        class="bg-black text-white px-4 py-2 rounded hover:bg-lime-500 transition w-full flex items-center justify-center font-medium"
+        :disabled="loading"
+        :class="{ 'opacity-50 cursor-not-allowed': loading }"
+        @click="
+          error = '';
+          loading = true;
+          fetch('/auth/login/cookie', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({ user, pass }),
+            credentials: 'include'
+          })
+          .then(async (res) => {
+            let data = null;
+            try {
+              data = await res.json();
+            } catch (e) {
+              // brak JSON-a – olewamy
+            }
+            return { status: res.status, ok: res.ok, data };
+          })
+          .then(({ ok, data }) => {
+            if (ok) {
+              // sukces logowania – BEZ patrzenia na message, wystarczy 2xx
+              window.location.href = '/app/dashboard';
+            } else {
+              // błąd logowania – spróbuj wyciągnąć error/message z backendu
+              error = (data && (data.error || data.message)) || ($store.i18n ? $store.i18n.t('login.error_invalid') : 'Nieprawidłowy login lub hasło');
+            }
+          })
+          .catch(() => {
+            error = $store.i18n ? $store.i18n.t('login.error_server') : 'Błąd połączenia z serwerem';
+          })
+          .finally(() => {
+            loading = false;
+          });
+        "
+      >
+        <template x-if="!loading">
+          <span x-text="$store.i18n ? $store.i18n.t('login.submit') : 'Zaloguj się'">Zaloguj się</span>
+        </template>
+        <template x-if="loading">
+          <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+          </svg>
+        </template>
+      </button>
+
+      <template x-if="error">
+        <div class="p-3 bg-red-100 text-red-800 border border-red-400 rounded">
+          ❌ <span x-text="error"></span>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  {{ template "footer.html" . }}
+</body>
+</html>
+{{ end }}
+

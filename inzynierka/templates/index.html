@@ -1,0 +1,105 @@
+{{ define "index.html" }}
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8">
+    <title>{{ .Title }}</title>
+	{{ template "lib". }}
+<link rel="icon" type="image/x-icon" href="/public/lib/img/favicon.png">
+  </head>
+  <body class="min-h-screen flex flex-col">
+    {{ template "navbar" . }}
+<video src="public/lib/vid/backgroundvid.mkv" autoplay muted loop></video>
+
+<style>
+    video {
+        height: auto;
+        width: 100%;
+	margin:0px;
+	padding:0px;
+    }
+</style>
+
+<img style="width:100%; height: auto;" src="public/lib/img/backgroundwtrhub.png"> 
+
+ <main class="grow px-6 lg:px-12 pb-16">
+      <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 items-center">
+        <div class="space-y-4">
+		<h2 class="text-3xl md:text-4xl font-bold leading-tight" x-text="$store.i18n ? $store.i18n.t('home.hero_title') : 'Rejestruj i analizuj czas pracy w jednym miejscu'">Rejestruj i analizuj czas pracy w jednym miejscu</h2><br>
+		<p class="text-slate-600" x-text="$store.i18n ? $store.i18n.t('home.hero_desc') : 'System zaprojektowany dla Małych i Średnich Przedsiębiorstw w Polsce. Zgodny z Kodeksem Pracy.'">System zaprojektowany dla <b>Małych i Średnich Przedsiębiorstw</b> zlokalizowanych w Polsce.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+          <div class="aspect-video rounded-xl bg-slate-100 grid place-items-center text-slate-400">
+		<img style="" src="public/lib/img/dashboard-example.png">
+
+	  </div>
+        </div>
+      </div>
+    </main>
+
+
+
+
+<img style="width:100%; height: auto;" src="public/lib/img/background-module-spacer.png"> 
+
+ <main class="grow px-6 lg:px-12 pb-16">
+      <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 items-center">
+        <div class="space-y-4">
+		<h2 class="text-3xl md:text-4xl font-bold leading-tight" x-text="$store.i18n ? $store.i18n.t('home.module_schedule_title') : 'Moduł - Grafik'">Moduł - Grafik</h2><br>
+		<p class="text-slate-600" x-text="$store.i18n ? $store.i18n.t('home.module_schedule_desc') : 'Zarządzaj, analizuj i planuj harmonogramy, które odmienią funkcjonowanie Twojej firmy.'">Zarządzaj analizuj i ciesz się grafikiem który odmieni twoją firmę</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+          <div class="aspect-video rounded-xl bg-slate-100 grid place-items-center text-slate-400">
+		<img style="" src="public/lib/img/schedule-example.png">
+
+	  </div>
+        </div>
+      </div>
+    </main>
+
+
+
+<img style="width:100%; height: auto;" src="public/lib/img/background-module-spacer.png"> 
+
+ <main class="grow px-6 lg:px-12 pb-16">
+      <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 items-center">
+        <div class="space-y-4">
+		<h2 class="text-3xl md:text-4xl font-bold leading-tight" x-text="$store.i18n ? $store.i18n.t('home.module_org_title') : 'Moduł - Organizacja'">Moduł - Organizacja</h2><br>
+		<p class="text-slate-600" x-text="$store.i18n ? $store.i18n.t('home.module_org_desc') : 'Odwzoruj strukturę firmy, działy, zespoły i wielopoziomowe ścieżki akceptacji wniosków.'">Tutaj odwzoruje swoją firmę nawet największy entuzjasta restrukturyzacji</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+          <div class="aspect-video rounded-xl bg-slate-100 grid place-items-center text-slate-400">
+		<img style="" src="public/lib/img/org-example.png">
+
+	  </div>
+        </div>
+      </div>
+    </main>
+
+
+<img style="width:100%; height: auto;" src="public/lib/img/background-module-spacer.png"> 
+
+ <main class="grow px-6 lg:px-12 pb-16">
+      <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 items-center">
+        <div class="space-y-4">
+		<h2 class="text-3xl md:text-4xl font-bold leading-tight" x-text="$store.i18n ? $store.i18n.t('home.module_api_title') : 'Moduł - Api(Json) developer'">Moduł - Api(Json) developer</h2><br>
+		<p class="text-slate-600" x-text="$store.i18n ? $store.i18n.t('home.module_api_desc') : 'Nowoczesna, w pełni udokumentowana specyfikacja REST API i Swagger dla programistów.'">Przyjazna dokumentacja dla programistów.</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+          <div class="aspect-video rounded-xl bg-slate-100 grid place-items-center text-slate-400">
+		<img style="" src="public/lib/img/api-example.png">
+
+	  </div>
+        </div>
+      </div>
+    </main>
+
+
+
+
+
+    {{ template "footer.html" . }}
+  </body>
+</html>
+{{ end }}
+

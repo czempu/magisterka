@@ -1,0 +1,70 @@
+{{define "navbar"}}
+
+<header class="px-6 lg:px-12 py-8 bg-white border-b border-gray-200">
+  <div class="max-w-6xl mx-auto flex items-center justify-between">
+    <!-- logo + nazwa -->
+    <div class="flex items-center gap-3">
+      <div class="h-10 grid place-items-center">
+        <img 
+          src="/public/lib/img/wtrhublogo.svg" 
+          alt="ERPBadger Logo"
+          class="h-8 w-auto opacity-90 hover:opacity-100 transition"
+        />
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-gray-900">ERPBadger</h1>
+        <p class="text-xs text-gray-500" x-text="$store.i18n ? $store.i18n.t('nav.tagline') : 'Enterprise Resource Planning & Time Hub'">Enterprise Resource Planning &amp; Time Hub</p>
+      </div>
+    </div>
+
+    <!-- nawigacja + przełącznik języka -->
+    <div class="flex items-center gap-6">
+      <nav class="hidden md:flex gap-6 text-sm text-gray-600">
+        <a class="hover:text-slate-900 transition" href="/" x-text="$store.i18n ? $store.i18n.t('nav.home') : 'Strona główna'">Strona główna</a>
+        <a class="hover:text-slate-900 transition" href="/login" x-text="$store.i18n ? $store.i18n.t('nav.login') : 'Logowanie'">Logowanie</a>
+        <a id="dashLink" class="hover:text-slate-900 transition hidden" href="/app/dashboard" x-text="$store.i18n ? $store.i18n.t('nav.dashboard') : 'Dashboard'">Dashboard</a>
+      </nav>
+
+      <!-- Language Switcher (PL / EN / DE) -->
+      <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200 text-xs font-medium" x-data>
+        <button 
+          type="button" 
+          class="px-2.5 py-1 rounded transition flex items-center gap-1"
+          :class="$store.i18n && $store.i18n.currentLang === 'pl' ? 'bg-white shadow text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900'"
+          @click="$store.i18n && $store.i18n.setLang('pl')"
+          title="Polski"
+        >
+          <span>🇵🇱</span> <span>PL</span>
+        </button>
+        <button 
+          type="button" 
+          class="px-2.5 py-1 rounded transition flex items-center gap-1"
+          :class="$store.i18n && $store.i18n.currentLang === 'en' ? 'bg-white shadow text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900'"
+          @click="$store.i18n && $store.i18n.setLang('en')"
+          title="English"
+        >
+          <span>🇬🇧</span> <span>EN</span>
+        </button>
+        <button 
+          type="button" 
+          class="px-2.5 py-1 rounded transition flex items-center gap-1"
+          :class="$store.i18n && $store.i18n.currentLang === 'de' ? 'bg-white shadow text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900'"
+          @click="$store.i18n && $store.i18n.setLang('de')"
+          title="Deutsch"
+        >
+          <span>🇩🇪</span> <span>DE</span>
+        </button>
+      </div>
+    </div>
+
+<script>
+  const logged = document.cookie.split('; ').some(x => x.startsWith('logged=1'));
+  if (logged) {
+    const dl = document.getElementById('dashLink');
+    if (dl) dl.classList.remove('hidden');
+  }
+</script>
+  </div>
+</header>
+
+    {{end}}

@@ -1,0 +1,13 @@
+{{ define "footer.html" }}
+<footer class="bg-black text-gray-400 py-12 mt-12">
+  <div class="max-w-6xl mx-auto px-6 lg:px-12">
+
+    <!-- Delikatny pasek oddzielający -->
+    <div class="border-t border-gray-800 pt-5 text-center text-xs text-gray-500">
+      © {{ .Year }} <span class="font-semibold text-gray-300">ERPBadger</span> – <span x-text="$store.i18n ? $store.i18n.t('footer.tagline') : 'Enterprise Resource Planning & Time Hub'">Enterprise Resource Planning &amp; Time Hub</span>. <span x-text="$store.i18n ? $store.i18n.t('footer.rights') : 'Wszystkie prawa zastrzeżone.'">Wszystkie prawa zastrzeżone.</span>
+    </div>
+
+  </div>
+</footer>
+{{ end }}
+

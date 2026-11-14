@@ -1,0 +1,401 @@
+{{ define "users.html" }}
+{{ template "layout-start" . }}
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- LEWA: lista użytkowników -->
+    <section class="bg-white rounded-2xl shadow p-4 md:p-6"
+             x-data="usersList()"
+             x-init="init()"
+             aria-labelledby="users-heading">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+        <div class="flex items-center gap-3">
+          <h2 id="users-heading" class="text-lg font-semibold">Użytkownicy</h2>
+          <button @click="fetchUsers()" class="text-sm px-3 py-1.5 rounded-lg border hover:bg-gray-50">
+            Odśwież
+          </button>
+        </div>
+
+        <!-- WYSZUKIWANIE -->
+        <div class="w-full sm:w-72">
+          <label class="block text-[11px] text-gray-500 mb-1">Szukaj</label>
+          <div class="relative">
+            <div class="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+            </div>
+            <input type="text"
+                   x-model="search"
+                   placeholder="Imię, nazwisko, username, email lub #ID"
+                   class="w-full border rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <template x-if="loading">
+        <div class="space-y-3">
+          <div class="h-16 rounded-xl bg-gray-100 animate-pulse"></div>
+          <div class="h-16 rounded-xl bg-gray-100 animate-pulse"></div>
+          <div class="h-16 rounded-xl bg-gray-100 animate-pulse"></div>
+        </div>
+      </template>
+
+      <!-- Error -->
+      <template x-if="error">
+        <div class="p-3 rounded-lg bg-red-50 text-red-700 text-sm" x-text="error"></div>
+      </template>
+
+      <!-- Pusta lista -->
+      <template x-if="!loading && !error && filteredItems.length === 0">
+        <div class="text-sm text-gray-600">
+          <template x-if="items.length === 0">
+            <span>Brak użytkowników.</span>
+          </template>
+          <template x-if="items.length > 0">
+            <span>Brak wyników dla podanego wyszukiwania.</span>
+          </template>
+        </div>
+      </template>
+
+      <!-- Kafelki użytkowników -->
+      <div role="list"
+           class="grid grid-cols-1 xl:grid-cols-2 gap-3"
+           x-show="!loading && !error && filteredItems.length > 0"
+           x-cloak>
+        <template x-for="u in filteredItems" :key="u.id">
+          <div role="listitem" class="user-card rounded-xl border p-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- LEWA: nazwa + id -->
+              <div class="min-w-0 flex-1">
+                <span class="font-medium truncate" x-text="u.Name"></span>
+                <span class="font-medium truncate" x-text="u.Surname"></span><br>
+                <div class="text-xs text-gray-500">
+                  Nazwa Użytkownika: <span x-text="u.username"></span><br>
+                  ID: <span x-text="u.id"></span>
+                </div>
+              </div>
+
+              <!-- PRAWA: przyciski -->
+              <div class="ml-auto flex flex-wrap gap-2 basis-full sm:basis-auto justify-start sm:justify-end">
+{{ if or (index .PermissionsSet "permissions:read:org") (index .PermissionsSet "*:*:org")  }}
+                <button
+                  class="px-2 py-1.5 rounded-lg border text-sm hover:bg-gray-50"
+                  title="Uprawnienia"
+                  @click.prevent="goToRole(u)">
+                  Uprawnienia
+                </button>
+	      {{else}}
+	      {{end}}
+
+{{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+                <button
+                  class="px-2 py-1.5 rounded-lg border text-sm hover:bg-gray-50"
+                  title="Informacje"
+                  @click.prevent="goToDetails(u)">
+                  Edytuj
+                </button>
+
+                <button
+                  class="px-2 py-1.5 rounded-lg border text-sm hover:bg-gray-50"
+                  title="Resetuj hasło"
+                  @click.prevent="resetPassword(u)">
+                  Resetuj hasło
+                </button>
+
+                <button
+                  class="px-2 py-1.5 rounded-lg text-white text-sm hover:bg-red-700 bg-red-600
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+                  :aria-disabled="deletingId === u.id"
+                  :disabled="deletingId === u.id"
+                  title="Usuń"
+                  @click.prevent="deleteUser(u)">
+                  <span x-show="deletingId !== u.id">Usuń</span>
+                  <span x-show="deletingId === u.id">Usuwam…</span>
+                </button>
+              </div>
+	      {{else}}
+	      {{end}}
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+{{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+    <!-- PRAWA: formularz dodawania -->
+    <section class="bg-white rounded-2xl shadow p-4 md:p-6"
+             x-data="apiDemo()"
+             x-init="init()">
+      <h2 class="text-lg font-semibold mb-4">Dodaj użytkownika</h2>
+
+      <!-- Flash WYŁĄCZNIE dla dodawania (nad formularzem) -->
+      <template x-if="flash && flash.text">
+        <div class="mb-4 rounded-xl border px-4 py-3 text-sm"
+             :class="flash.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'"
+             x-text="flash.text">
+        </div>
+      </template>
+
+      <form x-ref="form"
+            hx-post="/api/user/add"
+            hx-ext="json-enc"
+            hx-headers='{"Accept":"application/json"}'
+            hx-swap="none"
+            hx-indicator="#spinner"
+            class="space-y-4">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+          <input name="username" type="text" required
+                 placeholder="Nazwa użytkownika"
+                 class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-lime-500 p-2">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input name="email" type="email" required
+                 placeholder="np. mail@przykład.com"
+                 class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-lime-500 focus:border-lime-500 p-2">
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+          <button type="submit"
+                  class="inline-flex items-center justify-center rounded-xl bg-black text-white px-4 py-2 font-medium text-sm hover:bg-lime-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-lime-600 w-full sm:w-auto">
+            Wyślij
+          </button>
+
+          <div id="spinner" class="htmx-indicator text-sm text-gray-600">
+            Wysyłanie…
+          </div>
+        </div>
+      </form>
+
+      <!-- panel wyniku (debug: JSON response; bez statusu HTTP) -->
+    </section>
+{{else}}
+{{end}}
+  </div>
+
+
+<script>
+  function goToRole(u){
+    if (!u?.id) return;
+    window.location.assign('user/' + encodeURIComponent(u.id) + '/role');
+  }
+
+  function goToDetails(u){
+    if (!u?.id) return;
+    window.location.assign('user/' + encodeURIComponent(u.id) + '/details');
+  }
+
+  // --- utils ---
+  function getCookie(name) {
+    return document.cookie.split('; ')
+      .find(row => row.startsWith(name + '='))?.split('=')[1];
+  }
+
+  async function apiFetch(url, opts = {}) {
+    const doFetch = () => fetch(url, {
+      ...opts,
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCookie('XSRF-TOKEN') || '',
+        ...(opts.headers || {})
+      }
+    });
+
+    let res = await doFetch();
+    if (res.status === 401) {
+      const r = await fetch('/auth/refresh', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (r.ok) res = await doFetch();
+      else window.location = '/login';
+    }
+    return res;
+  }
+
+  // --- lewa kolumna: lista użytkowników ---
+  function usersList(){
+    return {
+      items: [],
+      loading: true,
+      error: '',
+      deletingId: null,
+      search: '',
+
+      get filteredItems() {
+        const q = (this.search || '').trim().toLowerCase();
+        if (!q) return this.items;
+
+        const q2 = q.startsWith('#') ? q.slice(1) : q;
+
+        return this.items.filter(u => {
+          const id = String(u.id || '');
+          const username = String(u.username || '').toLowerCase();
+          const email = String(u.email || '').toLowerCase();
+          const name = String(u.Name || '').toLowerCase();
+          const surname = String(u.Surname || '').toLowerCase();
+          const full = (name + ' ' + surname).trim();
+
+          return (
+            id.includes(q2) ||
+            username.includes(q) ||
+            email.includes(q) ||
+            name.includes(q) ||
+            surname.includes(q) ||
+            full.includes(q)
+          );
+        });
+      },
+
+      async fetchUsers(){
+        this.loading = true;
+        this.error = '';
+        try {
+          const res = await apiFetch('/api/users', { method: 'GET' });
+          if (!res.ok) throw new Error('Błąd ładowania listy (' + res.status + ')');
+          const json = await res.json();
+          this.items = Array.isArray(json?.data) ? json.data : [];
+        } catch (e) {
+          this.error = e.message || 'Nie udało się pobrać użytkowników.';
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async deleteUser(u){
+        if (!u?.id) return;
+        const ok = confirm(`Na pewno usunąć użytkownika: ${u.username} (#${u.id})?`);
+        if (!ok) return;
+
+        this.deletingId = u.id;
+        try {
+          const res = await apiFetch(`/api/user/${u.id}/delete`, {
+            method: 'POST',
+            body: JSON.stringify({ userid: u.id })
+          });
+
+          if (!res.ok) {
+            let msg = `Błąd usuwania (${res.status})`;
+            try {
+              const j = await res.json();
+              if (j?.message) msg += `: ${j.message}`;
+              if (j?.error) msg += `: ${j.error}`;
+            } catch {}
+            throw new Error(msg);
+          }
+
+          alert(`Usunięto użytkownika: ${u.username} (#${u.id}).`);
+          window.dispatchEvent(new CustomEvent('users:refresh'));
+        } catch (e) {
+          alert(e.message || 'Nie udało się usunąć użytkownika.');
+        } finally {
+          this.deletingId = null;
+        }
+      },
+
+      async resetPassword(u){
+        if (!u?.id) return;
+        const ok = confirm(`Na pewno chcesz zresetować hasło użytkownika o ${u.id}?`);
+        if (!ok) return;
+
+        try {
+          const res = await apiFetch(`/api/user/${u.id}/resetpassword`, {
+            method: 'POST',
+            body: JSON.stringify({ userid: u.id })
+          });
+
+          let j = null;
+          try { j = await res.json(); } catch { j = null; }
+
+          if (res.ok && (j?.message || j?.data)) {
+            alert(j?.message || j?.data || 'Hasło zresetowane.');
+            return;
+          }
+
+          const msg = (j?.error || j?.message) ? (j.error || j.message) : `Błąd resetowania hasła (${res.status})`;
+          alert(msg);
+        } catch (e) {
+          alert(e?.message || 'Nie udało się zresetować hasła.');
+        }
+      },
+
+      init(){
+        this.fetchUsers();
+        window.addEventListener('users:refresh', () => this.fetchUsers());
+      }
+    }
+  }
+
+  // --- prawa kolumna: formularz dodawania ---
+  function apiDemo() {
+    return {
+      res: null,
+      flash: { ok: true, text: '' },
+
+      setFlash(text, ok = true) {
+        this.flash = { text, ok };
+        if (text) setTimeout(() => { this.flash.text = ''; }, 5000);
+      },
+
+      pretty(v) {
+        if (v == null) return '';
+        if (typeof v === 'string') return v;
+        try { return JSON.stringify(v, null, 2); } catch { return String(v); }
+      },
+
+      init() {
+        this.$refs.form.addEventListener('htmx:configRequest', (e) => {
+          if (e.target !== this.$refs.form) return;
+          e.detail.headers['X-CSRF-Token'] = getCookie('XSRF-TOKEN') || '';
+          // czyść flash przed nową próbą
+          this.flash = { ok: true, text: '' };
+        });
+
+        this.$refs.form.addEventListener('htmx:afterRequest', (e) => {
+          if (e.target !== this.$refs.form) return;
+
+          const txt = e.detail.xhr.responseText || '';
+          let j = null;
+          try { j = JSON.parse(txt); } catch { j = txt; }
+          this.res = j;
+
+          // wg payloadu:
+          // fail:    { "error": "Użytkownik już istnieje!" }
+          // success: { "message": "Dodano użytkownika" }
+          if (j && typeof j === 'object' && j.error) {
+            this.setFlash(j.error, false);
+            return;
+          }
+
+          const msg = (j && typeof j === 'object' && (j.message || j.data)) ? (j.message || j.data) : 'Dodano użytkownika.';
+          this.setFlash(msg, true);
+
+          // wyczyść formularz i odśwież listę
+          try { this.$refs.form.reset(); } catch {}
+          window.dispatchEvent(new CustomEvent('users:refresh'));
+        });
+
+        this.$refs.form.addEventListener('htmx:responseError', (e) => {
+          if (e.target !== this.$refs.form) return;
+          const txt = e.detail.xhr?.responseText || '';
+          let j = null;
+          try { j = JSON.parse(txt); } catch { j = null; }
+          const msg = j?.error || j?.message || 'Błąd dodawania użytkownika.';
+          this.setFlash(msg, false);
+        });
+      }
+    }
+  }
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

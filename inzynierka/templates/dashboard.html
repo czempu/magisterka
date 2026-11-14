@@ -1,0 +1,528 @@
+{{ define "dashboard.html" }}
+{{ template "layout-start" . }}
+
+
+  <!-- GRID 1 kolumna mobile, 2 kolumny desktop -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+
+    <!-- KARTA 1 – Aktywni pracownicy (go-echarts) -->
+    <section class="p-4 md:p-6 bg-white rounded-xl shadow">
+      <h3 class="text-base md:text-lg font-semibold mb-3 md:mb-4" x-text="$store.i18n ? $store.i18n.t('dashboard.active_employees', 'Aktywni pracownicy') : 'Aktywni pracownicy'">Aktywni pracownicy</h3>
+
+      <!-- biblioteka echarts – może być ładowana z body -->
+      <script src="https://go-echarts.github.io/go-echarts-assets/assets/echarts.min.js"></script>
+
+      <div
+        id="chartContainer"
+        x-data="{ html: '' }"
+        x-init="
+          fetch('/api/stats/employees/chart')
+            .then(res => res.text())
+            .then(t => {
+              html = t
+              $nextTick(() => {
+                const container = document.getElementById('chartContainer')
+                container.innerHTML = html
+
+                container.querySelectorAll('script').forEach(script => {
+                  let s = document.createElement('script')
+                  s.textContent = script.textContent
+                  document.body.appendChild(s)
+                  s.remove()
+                })
+              })
+            })
+        "
+      >
+        <template x-if="html === ''">
+          <p class="text-gray-500 text-sm" x-text="$store.i18n ? $store.i18n.t('dashboard.loading_chart', 'Ładowanie wykresu…') : 'Ładowanie wykresu…'">Ładowanie wykresu…</p>
+        </template>
+        <div x-html="html"></div>
+      </div>
+    </section>
+
+
+    
+{{ if or (index .PermissionsSet "schedule:time:own") (index .PermissionsSet "*:*:org")  }}
+
+    <!-- KARTA 2 – Timer pracy -->
+    <section 
+      class="p-4 md:p-6 bg-white rounded-xl shadow flex flex-col"
+      x-data="WorkTimer()" 
+      x-init="init()"
+    >
+      <h3 class="text-base md:text-lg font-semibold mb-3 md:mb-4" x-text="$store.i18n ? $store.i18n.t('dashboard.work_time', 'Twój czas pracy') : 'Twój czas pracy'">Twój czas pracy</h3>
+
+      <!-- STATUS + TIMER -->
+      <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+        
+        <!-- START -->
+        <button
+          x-show="status === 0"
+          @click="start()"
+          :disabled="actionInProgress"
+          class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg border border-gray-300 hover:border-gray-400 transition
+                 grid place-items-center disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Start"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="currentColor">
+            <path d="M8 5v14l11-7-11-7z"></path>
+          </svg>
+        </button>
+
+        <!-- STOP -->
+        <button
+          x-show="status === 1"
+          @click="stop()"
+          :disabled="actionInProgress"
+          class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg border border-gray-300 hover:border-gray-400 transition
+                 grid place-items-center disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Stop"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="currentColor">
+            <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+          </svg>
+        </button>
+
+        <!-- TIMER -->
+        <div class="flex flex-col">
+          <div class="text-2xl md:text-3xl font-bold tabular-nums" x-text="formattedElapsed"></div>
+          <div class="text-xs md:text-sm text-gray-500" x-text="status === 1 ? ($store.i18n ? $store.i18n.t('dashboard.status_in_progress', 'w toku') : 'w toku') : ($store.i18n ? $store.i18n.t('dashboard.status_inactive', 'nieaktywny') : 'nieaktywny')"></div>
+        </div>
+      </div>
+
+      <!-- LOADING -->
+      <template x-if="loading">
+        <div class="mt-3 text-xs text-gray-400" x-text="$store.i18n ? $store.i18n.t('dashboard.loading_state', 'Ładowanie stanu…') : 'Ładowanie stanu…'">Ładowanie stanu…</div>
+      </template>
+
+      <!-- BŁĘDY -->
+      <template x-if="error">
+        <div class="mt-3 text-xs text-red-600" x-text="error"></div>
+      </template>
+    </section>
+
+{{ else }}
+
+{{ end }} 
+
+
+
+
+{{ if or (index .PermissionsSet "leaves:read:own") (index .PermissionsSet "leaves:read:team") (index .PermissionsSet "leaves:read:org")    (index .PermissionsSet "*:*:org")  }}
+    <!-- KARTA 3 – Ostatnie wnioski urlopowe -->
+    <section 
+      class="p-4 md:p-6 bg-white rounded-xl shadow"
+      x-data="leaveRequestsCard()"
+      x-init="init()"
+    >
+      <h3 class="text-base md:text-lg font-semibold mb-3" x-text="$store.i18n ? $store.i18n.t('dashboard.recent_leaves', 'Ostatnie wnioski urlopowe') : 'Ostatnie wnioski urlopowe'">Ostatnie wnioski urlopowe</h3>
+
+      <!-- Ładowanie -->
+      <template x-if="loading">
+        <p class="text-sm text-gray-500" x-text="$store.i18n ? $store.i18n.t('common.loading', 'Ładowanie…') : 'Ładowanie…'">Ładowanie…</p>
+      </template>
+
+      <!-- Błąd -->
+      <template x-if="!loading && error">
+        <p class="text-sm text-red-600" x-text="error"></p>
+      </template>
+
+      <!-- Brak danych -->
+      <template x-if="!loading && !error && items.length === 0">
+        <p class="text-sm text-gray-500" x-text="$store.i18n ? $store.i18n.t('dashboard.no_leaves', 'Brak wniosków urlopowych.') : 'Brak wniosków urlopowych.'">Brak wniosków urlopowych.</p>
+      </template>
+
+      <!-- Lista 3 ostatnich -->
+      <ul class="space-y-3 text-sm" x-show="!loading && !error && items.length > 0" x-cloak>
+        <template x-for="req in items" :key="req.ID">
+          <li class="flex flex-col sm:flex-row sm:justify-between bg-gray-50 p-3 rounded-lg border gap-2">
+            <div class="flex flex-col">
+              <span class="font-medium break-words" x-text="req.Username"></span>
+              <span class="text-xs text-gray-500" x-text="formatDate(req.CreatedAt)"></span>
+            </div>
+            <div class="sm:text-right">
+              <span class="font-semibold block" x-text="formatType(req.TypeCode)"></span>
+              <span class="text-xs"
+                    :class="req.Status === 'approved' ? 'text-green-600' : 'text-gray-500'"
+                    x-text="req.Status === 'approved' ? ($store.i18n ? $store.i18n.t('dashboard.status_approved', 'zatwierdzony') : 'zatwierdzony') : req.Status">
+              </span>
+            </div>
+          </li>
+        </template>
+      </ul>
+    </section>
+{{ else }}
+
+{{ end }}
+
+
+
+{{ if or (index .PermissionsSet "approvals:read:own") (index .PermissionsSet "approvals:read:team") (index .PermissionsSet "approvals:read:org")    (index .PermissionsSet "*:*:org")  }}
+
+    <!-- KARTA 4 – Oczekujące akceptacje -->
+    <section 
+      class="p-4 md:p-6 bg-white rounded-xl shadow"
+      x-data="pendingApprovalsCard({{ .User.ID }})"
+      x-init="init()"
+    >
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 class="text-base md:text-lg font-semibold" x-text="$store.i18n ? $store.i18n.t('dashboard.pending_approvals', 'Oczekujące akceptacje') : 'Oczekujące akceptacje'">Oczekujące akceptacje</h3>
+          <p class="text-xs text-gray-500 mt-0.5" x-text="$store.i18n ? $store.i18n.t('dashboard.pending_approvals_desc', 'Najbliższe wnioski przypisane do Ciebie jako akceptującego.') : 'Najbliższe wnioski przypisane do Ciebie jako akceptującego.'">
+            Najbliższe wnioski przypisane do Ciebie jako akceptującego.
+          </p>
+        </div>
+
+        <a href="/app/approvals"
+           class="shrink-0 inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs md:text-sm text-gray-700 hover:bg-gray-50"
+           x-text="$store.i18n ? $store.i18n.t('dashboard.go_to_approvals', 'Przejdź do akceptacji wniosków') : 'Przejdź do akceptacji wniosków'">
+          Przejdź do akceptacji wniosków
+        </a>
+      </div>
+
+      <template x-if="loading">
+        <p class="text-sm text-gray-500" x-text="$store.i18n ? $store.i18n.t('common.loading', 'Ładowanie...') : 'Ładowanie...'">Ładowanie...</p>
+      </template>
+
+      <template x-if="!loading && error">
+        <p class="text-sm text-red-600" x-text="error"></p>
+      </template>
+
+      <template x-if="!loading && !error && items.length === 0">
+        <p class="text-sm text-gray-500" x-text="$store.i18n ? $store.i18n.t('dashboard.no_pending_approvals', 'Brak oczekujących akceptacji.') : 'Brak oczekujących akceptacji.'">Brak oczekujących akceptacji.</p>
+      </template>
+
+      <ul class="space-y-3 text-sm" x-show="!loading && !error && items.length > 0" x-cloak>
+        <template x-for="item in items" :key="item.id">
+          <li class="flex flex-col gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-gray-900 font-medium">
+                  <!-- klik w ID -> szczegóły wniosku urlopowego -->
+                  <a class="font-mono underline decoration-dotted underline-offset-4 hover:text-gray-900"
+                     :href="leaveDetailsHref(item)"
+                     x-text="'#' + String(item.LeaveRequestID ?? item.TargetID ?? item.request_id)">
+                  </a>
+                  <span class="text-gray-500 font-normal ml-2"
+                        x-text="fullName(item)"></span>
+                </div>
+
+                <div class="mt-0.5 text-[11px] md:text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-1">
+                  <span>
+                    <span x-text="$store.i18n ? $store.i18n.t('dashboard.type', 'Typ') : 'Typ'">Typ</span>: <span class="font-medium text-gray-700" x-text="item.TypeCode ?? '—'"></span>
+                  </span>
+                  <span>
+                    <span x-text="$store.i18n ? $store.i18n.t('dashboard.range', 'Zakres') : 'Zakres'">Zakres</span>: <span class="font-medium text-gray-700" x-text="fmtDT(item.LeaveStart)"></span>
+                    <span class="text-gray-400 mx-1">→</span>
+                    <span class="font-medium text-gray-700" x-text="fmtDT(item.LeaveEnd)"></span>
+                  </span>
+                </div>
+              </div>
+
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border"
+                    :class="statusClass(item.status)">
+                <span x-text="statusPL(item.status)"></span>
+              </span>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] md:text-xs text-gray-500">
+              <span>
+                <span x-text="$store.i18n ? $store.i18n.t('dashboard.step', 'Krok') : 'Krok'">Krok</span>: <span class="font-mono" x-text="String(item.step_no ?? '—')"></span>
+              </span>
+              <span class="text-gray-500" x-text="fmtDT(item.CreatedAt)"></span>
+            </div>
+
+          </li>
+        </template>
+      </ul>
+    </section>
+{{ else }}
+
+{{ end }}
+
+  </div>
+
+<script>
+// 🔽 KARTA – Oczekujące akceptacje
+function pendingApprovalsCard(userID) {
+  return {
+    loading: true,
+    error: '',
+    items: [],
+
+    fullName(item) {
+      const n = String(item?.Name ?? '').trim();
+      const s = String(item?.Surname ?? '').trim();
+      const out = (n + ' ' + s).trim();
+      return out || '—';
+    },
+
+    // ucina mikrosekundy, zostawia "YYYY-MM-DD HH:MM:SS"
+    fmtDT(v) {
+      if (!v) return '—';
+      const s = String(v);
+      const dot = s.indexOf('.');
+      return dot > -1 ? s.slice(0, dot) : s;
+    },
+
+    statusPL(v) {
+      const s = String(v ?? '').trim().toLowerCase();
+      if (s === 'pending') return 'Oczekuje';
+      if (s === 'approved') return 'Zatwierdzony';
+      if (s === 'rejected') return 'Odrzucony';
+      return v ?? '—';
+    },
+
+    statusClass(v) {
+      const s = String(v ?? '').trim().toLowerCase();
+      if (s === 'pending') return 'border-amber-200 bg-amber-50 text-amber-800';
+      if (s === 'approved') return 'border-green-200 bg-green-50 text-green-800';
+      if (s === 'rejected') return 'border-red-200 bg-red-50 text-red-800';
+      return 'border-gray-200 bg-gray-50 text-gray-700';
+    },
+
+    leaveDetailsHref(item) {
+      const id = item?.LeaveRequestID ?? item?.TargetID;
+      if (!id) return '#';
+      return '/app/leaves/' + id;
+    },
+
+    async init() {
+      if (!userID) {
+        this.error = "Brak ID użytkownika do pobrania akceptacji.";
+        this.loading = false;
+        return;
+      }
+
+      this.loading = true;
+      this.error = '';
+      try {
+        const url = `/api/approval/pending/${userID}`;
+        
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include',
+        });
+
+        if (!res.ok) {
+          throw new Error('Błąd ładowania akceptacji (' + res.status + ')');
+        }
+        
+        const json = await res.json();
+        this.items = Array.isArray(json.data) ? json.data : [];
+
+      } catch (e) {
+        this.error = e.message || 'Nie udało się pobrać oczekujących akceptacji.';
+        console.error("Błąd pobierania oczekujących akceptacji:", e);
+      } finally {
+        this.loading = false;
+      }
+    }
+  }
+}
+
+function WorkTimer() {
+  return {
+    // STATE
+    status: 0,            // 0 - nieaktywny, 1 - aktywny
+    startedAt: null,      // Date | null
+    now: Date.now(),
+    loading: true,
+    actionInProgress: false,
+    error: '',
+
+    // TIMERS
+    _tickInterval: null,
+    _statusInterval: null,
+
+    init() {
+      this._tickInterval = setInterval(() => {
+        this.now = Date.now();
+      }, 1000);
+
+      this.refreshStatus();
+      this._statusInterval = setInterval(() => this.refreshStatus(), 30000);
+    },
+
+    async refreshStatus() {
+      try {
+        this.loading = true;
+        this.error = '';
+        const res = await fetch('/api/me/work/status', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error('Błąd statusu: ' + res.status);
+
+        const payload = await res.json();
+        const row = Array.isArray(payload?.data) ? payload.data[0] : null;
+
+        const rawStatus = row?.status ?? 0;
+        const rawData = row?.data ?? null;
+
+        this.status = Number(rawStatus) === 1 ? 1 : 0;
+        this.startedAt = this.status === 1 && rawData ? this.parseTimestamp(rawData) : null;
+      } catch (e) {
+        this.error = 'Nie udało się pobrać statusu';
+        console.error(e);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async start() {
+      if (this.actionInProgress) return;
+      this.actionInProgress = true;
+      this.error = '';
+      try {
+        const res = await fetch('/api/me/work/start', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: '{}'
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error('Start nieudany: ' + (text || res.status));
+        }
+        let startedAt = null;
+        try {
+          const json = await res.clone().json();
+          startedAt = json?.data?.started_at || json?.started_at || null;
+        } catch (_) {}
+        this.status = 1;
+        this.startedAt = this.parseTimestamp(startedAt) || new Date();
+      } catch (e) {
+        this.error = 'Nie udało się rozpocząć pracy';
+        console.error(e);
+        this.refreshStatus();
+      } finally {
+        this.actionInProgress = false;
+      }
+    },
+
+    async stop() {
+      if (this.actionInProgress) return;
+      this.actionInProgress = true;
+      this.error = '';
+      try {
+        const res = await fetch('/api/me/work/stop', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: '{}'
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error('Stop nieudany: ' + (text || res.status));
+        }
+        this.status = 0;
+        this.startedAt = null;
+      } catch (e) {
+        this.error = 'Nie udało się zakończyć pracy';
+        console.error(e);
+        this.refreshStatus();
+      } finally {
+        this.actionInProgress = false;
+      }
+    },
+
+    get elapsedSeconds() {
+      if (this.status !== 1 || !this.startedAt) return 0;
+      return Math.max(0, Math.floor((this.now - this.startedAt.getTime()) / 1000));
+    },
+
+    get formattedElapsed() {
+      const s = this.elapsedSeconds;
+      const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    },
+
+    parseTimestamp(v) {
+      if (!v) return null;
+      if (/\dT\d/.test(v)) {
+        const d = new Date(v);
+        return isNaN(d) ? null : d;
+      }
+      const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(v);
+      if (m) {
+        const [, Y, M, D, h, i, s] = m.map(Number);
+        return new Date(Y, M - 1, D, h, i, s, 0);
+      }
+      const d = new Date(v);
+      return isNaN(d) ? null : d;
+    },
+
+    destroy() {
+      clearInterval(this._tickInterval);
+      clearInterval(this._statusInterval);
+    }
+  }
+}
+
+// 🔽 KARTA – ostatnie 3 wnioski urlopowe
+function leaveRequestsCard() {
+  return {
+    loading: true,
+    error: '',
+    items: [],
+
+    async init() {
+      this.loading = true;
+      this.error = '';
+      try {
+        const res = await fetch('/api/request?limit=3&sort=-date', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          throw new Error('Błąd ładowania danych (' + res.status + ')');
+        }
+        const json = await res.json();
+        this.items = Array.isArray(json.data) ? json.data : [];
+      } catch (e) {
+        this.error = e.message || 'Nie udało się pobrać wniosków urlopowych.';
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    formatType(code) {
+      switch (code) {
+        case 'vacay':
+          return 'Urlop wypoczynkowy';
+        case 'l4':
+          return 'L4';
+        default:
+          return code;
+      }
+    },
+
+    formatDate(ts) {
+      if (!ts) return '-';
+      const [date, time] = ts.split(' ');
+      const hm = time ? time.slice(0, 5) : '';
+      return hm ? `${date} ${hm}` : date;
+    }
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

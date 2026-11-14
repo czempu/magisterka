@@ -1,0 +1,438 @@
+{{ define "approvals.html" }}
+{{ template "layout-start" . }}
+
+<style>
+  [x-cloak] { display: none !important; }
+</style>
+
+<div class="space-y-6 md:space-y-8"
+     x-data="approvalsPage({ userId: {{ .User.ID }} })"
+     x-init="init()"
+     x-cloak>
+
+  <!-- Flash messages -->
+  <div x-show="flash.text" x-transition
+       class="rounded-xl border px-4 py-3 text-sm"
+       :class="flash.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-800'">
+    <span x-text="flash.text"></span>
+  </div>
+
+  <!-- TABS -->
+  <div class="border-b border-gray-200 mb-2">
+    <nav class="-mb-px flex space-x-4 text-sm">
+      <button
+        type="button"
+        @click="activeTab = 'todo'"
+        class="px-3 py-2 border-b-2 font-medium"
+        :class="activeTab === 'todo'
+          ? 'border-lime-600 text-lime-700'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+        Do zatwierdzenia
+      </button>
+
+{{ if (index .PermissionsSet "*:*:org")  }}
+
+      <button
+        type="button"
+        @click="activeTab = 'dev'"
+        class="px-3 py-2 border-b-2 font-medium"
+        :class="activeTab === 'dev'
+          ? 'border-lime-600 text-lime-700'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+        Dev / debug
+      </button>
+
+{{ end }}
+    </nav>
+  </div>
+
+  <!-- TAB: DO ZATWIERDZENIA -->
+  <section
+    x-show="activeTab === 'todo'"
+    x-cloak
+    class="bg-white border rounded-2xl p-4 md:p-6 shadow-sm space-y-4">
+
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-semibold">Wnioski do akceptacji</h2>
+      </div>
+
+      <div class="flex gap-2 items-center">
+        <button
+          type="button"
+          @click="loadMyPending(true)"
+          class="px-4 py-2 rounded-lg border border-gray-300 text-xs md:text-sm text-gray-700 hover:bg-gray-50">
+          ⟳ Odśwież
+        </button>
+      </div>
+    </div>
+
+    <template x-if="!userId">
+      <div class="mt-2 text-xs md:text-sm text-red-600">
+        Brak identyfikatora użytkownika w sesji – nie można załadować wniosków do akceptacji.
+      </div>
+    </template>
+
+    <div class="w-full overflow-x-auto mt-2">
+      <table class="w-full text-sm border-t border-gray-200 min-w-[860px]">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-left whitespace-nowrap">Kogo dotyczy</th>
+            <th class="px-3 py-2 text-left whitespace-nowrap">Typ</th>
+            <th class="px-3 py-2 text-left whitespace-nowrap">Zakres</th>
+            <th class="px-3 py-2 text-left whitespace-nowrap">Utworzono</th>
+            <th class="px-3 py-2 text-left whitespace-nowrap">Status</th>
+            <th class="px-3 py-2 text-left whitespace-nowrap">Akcja</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="stepsMy.length === 0">
+            <tr>
+              <td colspan="6" class="px-3 py-4 text-center text-gray-500 text-sm">
+                Brak wniosków do zatwierdzenia.
+              </td>
+            </tr>
+          </template>
+
+          <template x-for="s in stepsMy" :key="s.id">
+            <tr class="border-b hover:bg-gray-50 align-top">
+              <td class="px-3 py-2">
+                <div class="font-medium text-gray-900" x-text="fullName(s)"></div>
+                <div class="text-[11px] text-gray-500">
+                  Wniosek: <span class="font-mono" x-text="String(s.LeaveRequestID ?? s.TargetID ?? '—')"></span>
+                  <span class="mx-1">·</span>
+                  Krok: <span class="font-mono" x-text="String(s.step_no ?? '—')"></span>
+                </div>
+              </td>
+
+              <td class="px-3 py-2 whitespace-nowrap">
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border border-gray-200 bg-gray-50 text-gray-700"
+                      x-text="s.Type ?? '—'"></span>
+              </td>
+
+              <td class="px-3 py-2 whitespace-nowrap">
+                <div class="text-gray-900" x-text="fmtDT(s.LeaveStart)"></div>
+                <div class="text-gray-500 text-[11px]" x-text="'→ ' + fmtDT(s.LeaveEnd)"></div>
+              </td>
+
+              <td class="px-3 py-2 whitespace-nowrap text-gray-700" x-text="fmtDT(s.CreatedAt)"></td>
+
+              <td class="px-3 py-2 whitespace-nowrap">
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border"
+                      :class="statusClass(s.status)">
+                  <span x-text="statusPL(s.status)"></span>
+                </span>
+              </td>
+
+              <td class="px-3 py-2 whitespace-nowrap">
+                <div class="flex flex-wrap gap-2">
+                  <a
+                    :href="detailsHref(s)"
+                    class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs sm:text-sm hover:bg-gray-50">
+                    Szczegóły
+                  </a>
+
+                  <button
+                    @click="decideForMy(s.id, 'approved')"
+                    class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm hover:bg-green-700">
+                    ✔ Zatwierdź
+                  </button>
+                  <button
+                    @click="decideForMy(s.id, 'rejected')"
+                    class="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm hover:bg-red-700">
+                    ✖ Odrzuć
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+{{ if (index .PermissionsSet "*:*:org")  }}
+  <!-- TAB: DEV / DEBUG -->
+  <section x-show="activeTab === 'dev'" x-cloak class="space-y-6">
+
+    <section class="bg-white border rounded-2xl p-4 md:p-6 shadow-sm">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
+        <h2 class="text-lg font-semibold">Wnioski oczekujące (Dev)</h2>
+
+        <form class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center"
+              @submit.prevent="loadPendingDev(true)">
+          <input type="number"
+                 x-model="approverID"
+                 placeholder="ID menedżera"
+                 class="border rounded-lg px-3 py-2 text-sm w-full sm:w-48" />
+          <button class="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-lime-700">
+            Załaduj
+          </button>
+        </form>
+      </div>
+
+      <div class="w-full overflow-x-auto">
+        <table class="w-full text-sm border-t border-gray-200 min-w-[860px]">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Kogo dotyczy</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Typ</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Zakres</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Utworzono</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Status</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Akcja</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-if="stepsDev.length === 0">
+              <tr>
+                <td colspan="6" class="px-3 py-4 text-center text-gray-500 text-sm">
+                  Brak danych – podaj ID menedżera i kliknij „Załaduj”.
+                </td>
+              </tr>
+            </template>
+
+            <template x-for="s in stepsDev" :key="s.id">
+              <tr class="border-b hover:bg-gray-50 align-top">
+                <td class="px-3 py-2">
+                  <div class="font-medium text-gray-900" x-text="fullName(s)"></div>
+                  <div class="text-[11px] text-gray-500">
+                    Wniosek: <span class="font-mono" x-text="String(s.LeaveRequestID ?? s.TargetID ?? '—')"></span>
+                    <span class="mx-1">·</span>
+                    Step: <span class="font-mono" x-text="String(s.id ?? '—')"></span>
+                    <span class="mx-1">·</span>
+                    Krok: <span class="font-mono" x-text="String(s.step_no ?? '—')"></span>
+                  </div>
+                </td>
+
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border border-gray-200 bg-gray-50 text-gray-700"
+                        x-text="s.TypeCode ?? '—'"></span>
+                </td>
+
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <div class="text-gray-900" x-text="fmtDT(s.LeaveStart)"></div>
+                  <div class="text-gray-500 text-[11px]" x-text="'→ ' + fmtDT(s.LeaveEnd)"></div>
+                </td>
+
+                <td class="px-3 py-2 whitespace-nowrap text-gray-700" x-text="fmtDT(s.CreatedAt)"></td>
+
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border"
+                        :class="statusClass(s.status)">
+                    <span x-text="statusPL(s.status)"></span>
+                  </span>
+                </td>
+
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <div class="flex flex-wrap gap-2">
+                    <a
+                      :href="detailsHref(s)"
+                      class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs sm:text-sm hover:bg-gray-50">
+                      Szczegóły
+                    </a>
+
+                    <button
+                      @click="decideDev(s.id, 'approved')"
+                      class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm hover:bg-green-700">
+                      ✔
+                    </button>
+                    <button
+                      @click="decideDev(s.id, 'rejected')"
+                      class="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm hover:bg-red-700">
+                      ✖
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+{{ end }}
+
+</div>
+
+<script>
+  function approvalsPage({ userId } = {}) {
+    const jsonOrNull = async (res) => {
+      try { return await res.json(); } catch (_) { return null; }
+    };
+
+    return {
+      userId: userId || null,
+      activeTab: 'todo',
+
+      // dev
+      approverID: '',
+      stepsDev: [],
+      // my approvals
+      stepsMy: [],
+
+      flash: { text: '', ok: true },
+
+      async init() {
+        if (this.userId) {
+          this.approverID = String(this.userId);
+          await this.loadMyPending(false);
+        }
+      },
+
+      setFlash(text, ok = true) {
+        this.flash = { text: text || '', ok: !!ok };
+        if (this.flash.text) {
+          setTimeout(() => {
+            if (this.flash.text === text) this.flash.text = '';
+          }, 5000);
+        }
+      },
+
+      fullName(s) {
+        const n = (s?.Name || '').trim();
+        const sur = (s?.Surname || '').trim();
+        const out = (n + ' ' + sur).trim();
+        return out || '—';
+      },
+
+      fmtDT(v) {
+        if (!v) return '—';
+        const s = String(v);
+        const dot = s.indexOf('.');
+        return dot > -1 ? s.slice(0, dot) : s;
+      },
+
+      statusPL(v) {
+        const s = String(v ?? '').trim().toLowerCase();
+        if (s === 'pending') return 'Oczekuje';
+        if (s === 'approved') return 'Zatwierdzony';
+        if (s === 'rejected') return 'Odrzucony';
+        return v ?? '—';
+      },
+
+      statusClass(v) {
+        const s = String(v ?? '').trim().toLowerCase();
+        if (s === 'pending') return 'border-amber-200 bg-amber-50 text-amber-800';
+        if (s === 'approved') return 'border-green-200 bg-green-50 text-green-800';
+        if (s === 'rejected') return 'border-red-200 bg-red-50 text-red-800';
+        return 'border-gray-200 bg-gray-50 text-gray-700';
+      },
+
+      detailsHref(s) {
+        const id = s?.LeaveRequestID ?? s?.TargetID;
+        if (!id) return '#';
+        return `/app/leaves/${id}`;
+      },
+
+      // --- PROD: moje wnioski ---
+      async loadMyPending(showFlashIfEmpty) {
+        if (!this.userId) {
+          this.setFlash('Brak userId w sesji – nie można pobrać wniosków.', false);
+          return;
+        }
+        try {
+          const res = await fetch(`/api/approval/pending/${this.userId}`, { headers: { 'Accept': 'application/json' }});
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const json = await res.json();
+          this.stepsMy = json.data || [];
+
+          // WAŻNE: nie kasujemy flasha, bo mógł być ustawiony po decyzji.
+          if (showFlashIfEmpty && this.stepsMy.length === 0) {
+            this.setFlash('Brak wniosków do zatwierdzenia.', true);
+          }
+        } catch (e) {
+          this.setFlash('Błąd pobierania wniosków: ' + (e.message || ''), false);
+        }
+      },
+
+      async decideForMy(stepID, decision) {
+        if (!this.userId) {
+          this.setFlash('Brak userId w sesji – nie można wysłać decyzji.', false);
+          return;
+        }
+        try {
+          const res = await fetch(`/api/approval/${stepID}/decision`, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approver_id: Number(this.userId), decision })
+          });
+
+          const payload = await jsonOrNull(res);
+
+          if (!res.ok) {
+            const msg = payload?.message || payload?.error || 'Błąd przy decyzji';
+            throw new Error(msg);
+          }
+
+          // Backend zwraca: {"data":"..."}
+          const okMsg =
+            (typeof payload?.message === 'string' && payload.message) ||
+            (typeof payload?.data === 'string' && payload.data) ||
+            (typeof payload?.status === 'string' && payload.status) ||
+            (decision === 'approved' ? 'Zatwierdzono.' : 'Odrzucono.');
+
+          this.setFlash(okMsg, true);
+
+          await this.loadMyPending(false);
+        } catch (e) {
+          this.setFlash(e?.message || 'Nie udało się zapisać decyzji', false);
+        }
+      },
+
+      // --- DEV ---
+      async loadPendingDev(showFlash) {
+        if (!this.approverID || isNaN(this.approverID)) {
+          this.setFlash('Podaj prawidłowe ID menedżera.', false);
+          return;
+        }
+        try {
+          const res = await fetch(`/api/approval/pending/${this.approverID}`, { headers: { 'Accept': 'application/json' }});
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const json = await res.json();
+          this.stepsDev = json.data || [];
+          if (showFlash) this.setFlash('Załadowano dane (Dev).', true);
+        } catch (e) {
+          this.setFlash('Błąd ładowania (Dev): ' + (e.message || ''), false);
+        }
+      },
+
+      async decideDev(stepID, decision) {
+        if (!this.approverID || isNaN(this.approverID)) {
+          this.setFlash('Podaj ID menedżera przed decyzją (Dev).', false);
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/approval/${stepID}/decision`, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approver_id: Number(this.approverID), decision })
+          });
+
+          const payload = await jsonOrNull(res);
+
+          if (!res.ok) {
+            const msg = payload?.message || payload?.error || 'Błąd przy decyzji (Dev)';
+            throw new Error(msg);
+          }
+
+          const okMsg =
+            (typeof payload?.message === 'string' && payload.message) ||
+            (typeof payload?.data === 'string' && payload.data) ||
+            (decision === 'approved' ? 'Zatwierdzono (Dev).' : 'Odrzucono (Dev).');
+
+          this.setFlash(okMsg, true);
+
+          await this.loadPendingDev(false);
+        } catch (e) {
+          this.setFlash(e?.message || 'Błąd decyzji (Dev)', false);
+        }
+      }
+    }
+  }
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

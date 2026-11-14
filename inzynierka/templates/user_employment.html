@@ -1,0 +1,335 @@
+{{ define "user_employment.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-5xl mx-auto p-4 md:p-6 space-y-6"
+     x-data="employmentView({ userId: {{ .TargetUser.ID }} })"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header>
+    <nav class="text-xs md:text-sm text-gray-500 mb-1">
+      <a href="/app/users" class="hover:text-gray-700">Użytkownicy</a>
+      <span class="mx-1">/</span>
+      <span>Wymiar czasu pracy #<span x-text="userId"></span></span>
+    </nav>
+    <h1 class="text-lg md:text-xl font-semibold">Wymiar czasu pracy</h1>
+  </header>
+
+  <!-- FLASH BAR (global) -->
+  <div x-show="flash.text" x-transition
+       class="rounded-xl border px-4 py-3 text-xs md:text-sm"
+       :class="flash.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-800'">
+    <span x-text="flash.text"></span>
+  </div>
+
+  <!-- tabela historii -->
+  <section class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+    <div class="w-full overflow-x-auto">
+      <table class="min-w-full text-xs md:text-sm">
+        <thead class="bg-gray-100 text-gray-700 uppercase text-[10px] md:text-xs">
+          <tr>
+            <th class="p-2 text-left whitespace-nowrap">Od</th>
+            <th class="p-2 text-left whitespace-nowrap">Do</th>
+            <th class="p-2 text-left whitespace-nowrap">Ekwiwalent Pełnego Etatu</th>
+            <th class="p-2 text-left whitespace-nowrap">Stanowisko</th>
+            <th class="p-2 text-center whitespace-nowrap">Akcje</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="terms.length === 0">
+            <tr>
+              <td colspan="8" class="p-4 text-center text-gray-500 text-xs md:text-sm">
+                Brak zapisanych okresów zatrudnienia.
+              </td>
+            </tr>
+          </template>
+
+          <template x-for="term in terms" :key="term.id">
+            <tr class="border-t hover:bg-gray-50">
+              <td class="p-2" x-text="term.effective_from"></td>
+              <td class="p-2" x-text="term.effective_to || '-'"></td>
+              <td class="p-2" x-text="Number(term.fte_percent).toFixed(2)"></td>
+              <td class="p-2" x-text="term.position"></td>
+              <td class="p-2 text-center">
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-2">
+                  <button @click="editTerm(term)"
+                          class="text-lime-600 hover:underline text-xs font-medium">
+
+   {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+                    Edytuj
+   {{ else }}
+                    Brak uprawnień do edycji
+   {{ end }}
+                  </button>
+
+   {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+                  <button @click="deleteTerm(term)"
+                          class="text-red-600 hover:underline text-xs font-medium">
+                    Usuń
+                  </button>
+   {{ end }}
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+   {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+  <!-- formularz dodania / edycji -->
+  <section class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 md:p-5">
+    <h2 class="text-base md:text-lg font-semibold mb-3"
+        x-text="editMode ? 'Edytuj okres zatrudnienia' : 'Dodaj nowy okres zatrudnienia'"></h2>
+
+    <form class="grid grid-cols-1 md:grid-cols-2 gap-4" @submit.prevent="save">
+      <input x-model="form.id" type="hidden" />
+      <input x-model="form.user_id" type="hidden" :value="userId" />
+
+      <div>
+        <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Od</label>
+        <input x-model="form.effective_from" type="date"
+               class="p-2 border rounded-lg w-full text-sm" required />
+      </div>
+
+      <div>
+        <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Do</label>
+        <input x-model="form.effective_to" type="date"
+               class="p-2 border rounded-lg w-full text-sm" />
+      </div>
+
+      <div>
+        <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Ekwiwalent Pełnego Etatu</label>
+        <input x-model.number="form.fte_percent" type="number" step="0.01" min="0" max="1"
+               class="p-2 border rounded-lg w-full text-sm" required />
+      </div>
+
+      <div>
+        <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Stanowisko</label>
+        <input x-model="form.position" type="text"
+               class="p-2 border rounded-lg w-full text-sm" />
+      </div>
+
+      <div class="md:col-span-2 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 mt-2">
+        <button type="button" x-show="editMode"
+                @click="cancelEdit"
+                class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-xs md:text-sm w-full sm:w-auto text-center">
+          Anuluj
+        </button>
+
+        <button type="submit"
+                class="px-4 py-2 bg-black text-white rounded-lg hover:bg-lime-500 text-xs md:text-sm w-full sm:w-auto text-center"
+                :disabled="saving">
+          <span x-show="!saving" x-text="editMode ? 'Zapisz zmiany' : 'Dodaj'"></span>
+          <span x-show="saving">Zapisywanie…</span>
+        </button>
+      </div>
+    </form>
+  </section>
+   {{ end }}
+
+</div>
+
+<script>
+  // --- utils (cookies + fetch z credentials) ---
+  function getCookie(name) {
+    return document.cookie.split('; ')
+      .find(row => row.startsWith(name + '='))?.split('=')[1];
+  }
+
+  async function apiFetch(url, opts = {}) {
+    return fetch(url, {
+      ...opts,
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCookie('XSRF-TOKEN') || '',
+        ...(opts.headers || {})
+      }
+    });
+  }
+
+function employmentView({ userId }) {
+  return {
+    userId,
+    terms: [],
+    editMode: false,
+    saving: false,
+
+    flash: { text: '', ok: true },
+
+    form: {
+      id: null,
+      user_id: userId,
+      effective_from: '',
+      effective_to: null,
+      fte_percent: 1.0,
+      nominal_day_minutes: 480,
+      pay_group: '',
+      position: '',
+      cost_center: ''
+    },
+
+    setFlash(text, ok = true) {
+      this.flash = { text: text || '', ok: !!ok };
+      if (this.flash.text) {
+        setTimeout(() => {
+          if (this.flash.text === text) this.flash.text = '';
+        }, 5000);
+      }
+    },
+
+    async init() { await this.load() },
+
+    async load() {
+      try {
+        const res = await apiFetch(`/api/user/${this.userId}/employment`, { method: 'GET' });
+        const json = await res.json();
+        this.terms = (json.data || []).map(t => ({
+          ...t,
+          fte_percent: parseFloat(t.fte_percent ?? 0),
+          nominal_day_minutes: parseFloat(t.nominal_day_minutes ?? 0)
+        }));
+      } catch (e) {
+        this.setFlash('Nie udało się pobrać okresów zatrudnienia.', false);
+      }
+    },
+
+    editTerm(term) {
+      this.editMode = true;
+      this.form = { ...term };
+      this.form.fte_percent = parseFloat(term.fte_percent ?? 0);
+      this.form.nominal_day_minutes = parseFloat(term.nominal_day_minutes ?? 0);
+      this.setFlash('', true);
+    },
+
+    cancelEdit() {
+      this.editMode = false;
+      this.resetForm();
+    },
+
+    async save() {
+      if (this.saving) return;
+      this.saving = true;
+      this.setFlash('', true);
+
+      try {
+        const payload = {
+          ...this.form,
+          fte_percent: parseFloat(this.form.fte_percent ?? 0),
+          nominal_day_minutes: parseFloat(this.form.nominal_day_minutes ?? 0)
+        };
+
+        const method = this.editMode ? 'PUT' : 'POST';
+        const url = this.editMode
+          ? `/api/user/${this.userId}/employment/${this.form.id}`
+          : `/api/user/${this.userId}/employment`;
+
+        const res = await apiFetch(url, {
+          method,
+          body: JSON.stringify(payload)
+        });
+
+        let data = null;
+        try { data = await res.json(); } catch (_) { data = null; }
+
+        // Kluczowe: obsłuż {error:"..."} także przy 200
+        if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+          this.setFlash(data.error, false);
+          return;
+        }
+
+        if (!res.ok) {
+          const msg =
+            (data && typeof data === 'object' && (data.message || data.data)) ? (data.message || data.data)
+            : `Błąd zapisu (HTTP ${res.status}).`;
+          this.setFlash(msg, false);
+          return;
+        }
+
+        const okMsg =
+          (typeof data?.data === 'string' && data.data) ||
+          (typeof data?.message === 'string' && data.message) ||
+          'Zapisano zmiany.';
+
+        this.setFlash(okMsg, true);
+
+        this.editMode = false;
+        this.resetForm();
+        await this.load();
+      } catch (e) {
+        this.setFlash(e?.message || 'Nie udało się zapisać zmian.', false);
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async deleteTerm(term) {
+      if (!term?.id) return;
+      const ok = confirm(`Usunąć kontrakt (#${term.id}) od ${term.effective_from} do ${term.effective_to || '-'}?`);
+      if (!ok) return;
+
+      this.setFlash('', true);
+
+      try {
+        const res = await apiFetch(`/api/employment/${encodeURIComponent(term.id)}`, {
+          method: 'DELETE'
+        });
+
+        let data = null;
+        try { data = await res.json(); } catch (_) { data = null; }
+
+        // obsłuż {error:"..."} zawsze
+        if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+          this.setFlash(data.error, false);
+          return;
+        }
+
+        if (!res.ok) {
+          const msg =
+            (data && typeof data === 'object' && (data.message || data.data)) ? (data.message || data.data)
+            : `Błąd usuwania (HTTP ${res.status}).`;
+          this.setFlash(msg, false);
+          return;
+        }
+
+        const okMsg =
+          (typeof data?.data === 'string' && data.data) ||
+          (typeof data?.message === 'string' && data.message) ||
+          'Usunięto kontrakt.';
+
+        this.setFlash(okMsg, true);
+        await this.load();
+
+        // jeśli użytkownik kasował edytowany rekord — wyjdź z edycji
+        if (this.editMode && String(this.form.id) === String(term.id)) {
+          this.editMode = false;
+          this.resetForm();
+        }
+      } catch (e) {
+        this.setFlash(e?.message || 'Nie udało się usunąć kontraktu.', false);
+      }
+    },
+
+    resetForm() {
+      this.form = {
+        id: null,
+        user_id: this.userId,
+        effective_from: '',
+        effective_to: null,
+        fte_percent: 1.0,
+        nominal_day_minutes: 480,
+        pay_group: '',
+        position: '',
+        cost_center: ''
+      };
+    }
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

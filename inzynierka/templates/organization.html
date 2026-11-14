@@ -1,0 +1,971 @@
+{{ define "organization.html" }}
+{{ template "layout-start" . }}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/treant-js/Treant.css" />
+<script src="https://cdn.jsdelivr.net/npm/treant-js/vendor/raphael.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/treant-js/Treant.js"></script>
+
+<style>
+  [x-cloak] { display: none !important; }
+
+  .chart {
+    width: 100%;
+    min-height: 360px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .org-node {
+    background: #f9fafb;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 8px 12px;
+    text-align: center;
+    width: 170px;
+    font-family: system-ui, sans-serif;
+    color: black;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.08);
+  }
+
+  .org-node .node-name {
+    font-weight: 650;
+    color: black;
+    display: block;
+  }
+
+  .org-node .node-title {
+    font-size: 12px;
+    color: #4b5563;
+    display: block;
+  }
+
+  #org-trees {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+</style>
+
+<div class="max-w-6xl mx-auto p-4 md:p-8 space-y-6"
+     x-data="organizationPage({
+       userId: {{ .User.ID }},
+       canManage: {{ if or (index .PermissionsSet "*:*:org") (index .PermissionsSet "organization:update:org") }}true{{ else }}false{{ end }}
+     })"
+     x-init="init()"
+     x-cloak>
+
+  <!-- HEADER -->
+  <header class="mb-2">
+    <h1 class="text-lg md:text-xl font-semibold text-black">Organizacja</h1>
+    <p class="text-xs md:text-sm text-gray-600">
+      Struktura organizacyjna oraz przypisania użytkowników do jednostek.
+    </p>
+  </header>
+
+  <!-- GLOBAL FLASH -->
+  <div x-show="flash.text" x-transition
+       class="rounded-xl border px-4 py-3 text-xs md:text-sm"
+       :class="flash.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-800'">
+    <span x-text="flash.text"></span>
+  </div>
+
+  <!-- TABS -->
+  <nav class="flex items-center justify-between gap-2 border-b border-gray-200 text-sm">
+    <div class="flex">
+      <button type="button"
+              @click="activeTab = 'standard'"
+              class="px-4 py-2 -mb-px border-b-2"
+              :class="activeTab === 'standard'
+                ? 'border-lime-600 text-lime-700 font-medium'
+                : 'border-transparent text-gray-500 hover:text-gray-700'">
+        Standard
+      </button>
+
+      <button type="button"
+              @click="activeTab = 'manage'"
+              x-show="canManage"
+              class="px-4 py-2 -mb-px border-b-2"
+              :class="activeTab === 'manage'
+                ? 'border-lime-600 text-lime-700 font-medium'
+                : 'border-transparent text-gray-500 hover:text-gray-700'">
+        Zarządzanie
+      </button>
+    </div>
+
+    <div class="flex items-center gap-2 py-2">
+      <button @click="reloadAll(true)"
+              class="text-[11px] md:text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">
+        ⟳ Odśwież
+      </button>
+    </div>
+  </nav>
+
+  <!-- TAB: STANDARD -->
+  <div x-show="activeTab === 'standard'" x-transition class="space-y-6">
+
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- MOJA JEDNOSTKA -->
+      <div class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-3">
+        <header>
+          <h2 class="text-sm md:text-base font-semibold text-gray-900">Moja jednostka</h2>
+        </header>
+
+        <template x-if="!myPrimaryUnitId">
+          <div class="text-xs md:text-sm text-gray-500">
+            Nie masz ustawionej jednostki.
+          </div>
+        </template>
+
+        <template x-if="myPrimaryUnitId">
+          <div class="space-y-2">
+            <div class="text-xs md:text-sm">
+              <span class="text-gray-500">Jednostka:</span>
+              <span class="font-medium text-gray-900" x-text="myPrimaryUnitName || ('#' + myPrimaryUnitId)"></span>
+            </div>
+            <div class="text-xs md:text-sm">
+              <span class="text-gray-500">Kod:</span>
+              <span class="font-mono text-gray-800" x-text="myPrimaryUnitCode || '—'"></span>
+            </div>
+
+            <div class="pt-2 border-t border-gray-100">
+              <div class="text-xs md:text-sm text-gray-600" x-show="myUnitManager">
+                Kierownik:
+                <span class="font-semibold" x-text="userLabel(myUnitManager)"></span>
+              </div>
+              <div class="text-xs md:text-sm text-gray-400" x-show="myPrimaryUnitId && !myUnitManager">
+                Kierownik nie jest ustawiony.
+              </div>
+            </div>
+
+            <div class="pt-2">
+              <a class="text-xs md:text-sm text-lime-700 hover:underline"
+                 href="#"
+                 @click.prevent="scrollToTree()">
+                Przejdź do schematu organizacji
+              </a>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- MÓJ ZESPÓŁ -->
+      <div class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-3 lg:col-span-2">
+        <header class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-sm md:text-base font-semibold text-gray-900">Użytkownicy Przypisani do tej samej jednostki</h2>
+          </div>
+          <button type="button"
+                  @click="reloadAll(true)"
+                  class="px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] md:text-xs text-gray-700 hover:bg-gray-50">
+            ⟳ Odśwież
+          </button>
+        </header>
+
+        <div class="w-full overflow-x-auto">
+          <table class="min-w-full text-xs md:text-sm border-t border-gray-200">
+            <thead class="bg-gray-50 text-gray-700">
+              <tr>
+                <th class="px-3 py-2 text-left whitespace-nowrap">Użytkownik</th>
+                <th class="px-3 py-2 text-left whitespace-nowrap">Login</th>
+                <th class="px-3 py-2 text-left whitespace-nowrap">Stanowisko</th>
+              </tr>
+           </thead>
+            <tbody>
+              <template x-if="teamMembers.length === 0">
+                <tr>
+                  <td colspan="4" class="px-3 py-3 text-center text-gray-500">
+                    Brak danych zespołu (albo brak primary jednostki).
+                  </td>
+                </tr>
+              </template>
+
+              <template x-for="m in teamMembers" :key="'team-' + m.user.id">
+                <tr class="border-b hover:bg-gray-50">
+                  <td class="px-3 py-2 whitespace-nowrap">
+                    <span class="font-medium text-gray-900" x-text="userLabel(m.user)"></span>
+                    <span class="text-[11px] text-gray-400" x-text="'#' + m.user.id"></span>
+                  </td>
+                  <td class="px-3 py-2 whitespace-nowrap text-gray-600" x-text="m.user.username || '—'"></td>
+                  <td class="px-3 py-2 whitespace-nowrap text-gray-600" x-text="m.membership?.title || '—'"></td>
+                  <td class="px-3 py-2 whitespace-nowrap">
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Struktura organizacyjna -->
+    <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-3"
+             id="org-tree-card">
+      <header class="flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-sm md:text-base font-semibold text-gray-900">Struktura organizacyjna</h2>
+          <p class="text-[11px] md:text-xs text-gray-500">
+            Widok drzewa jednostek.          </p>
+        </div>
+        <button type="button"
+                @click="renderTreeNow()"
+                class="px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] md:text-xs text-gray-700 hover:bg-gray-50">
+          ⟳ Odśwież
+        </button>
+      </header>
+
+      <div id="org-trees"></div>
+    </section>
+  </div>
+
+  <!-- TAB: ZARZĄDZANIE -->
+  <div x-show="activeTab === 'manage' && canManage" x-transition class="space-y-6">
+
+    <!-- GŁÓWNY GRID: LISTA + PANEL SZCZEGÓŁÓW -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+
+      <!-- LEWA KOLUMNA: JEDNOSTKI -->
+      <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-4 md:space-y-6 lg:col-span-2">
+        <header class="flex flex-col gap-2 md:flex-row md:justify-between md:items-center">
+          <div>
+            <h2 class="text-base md:text-lg font-semibold text-gray-900">Jednostki organizacyjne</h2>
+            <p class="text-[11px] md:text-xs text-gray-500">
+              Dodawanie, edycja oraz wybór jednostki do zarządzania.
+            </p>
+          </div>
+          <button @click="reloadAll(true)"
+                  class="text-[11px] md:text-xs px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">
+            ⟳ Odśwież
+          </button>
+        </header>
+
+        <!-- Formularz dodania -->
+        <form class="grid grid-cols-1 md:grid-cols-4 gap-2 md:gap-3 items-end"
+              @submit.prevent="addUnit()">
+          <div class="md:col-span-2">
+            <label class="block text-xs text-gray-600 mb-1">Nazwa działu</label>
+            <input type="text" x-model="newUnit.name"
+                   class="w-full border px-3 py-2 rounded-lg text-sm" required />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Kod</label>
+            <input type="text" x-model="newUnit.code" placeholder="np. IT"
+                   class="w-full border px-3 py-2 rounded-lg text-sm" required />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1">Rodzic</label>
+            <select x-model="newUnit.parent_id"
+                    class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm">
+              <option value="">— brak (korzeń) —</option>
+              <template x-for="u in orgs" :key="'parent-' + u.id">
+                <option :value="String(u.id)" x-text="u.name + ' (#' + u.id + ')'"></option>
+              </template>
+            </select>
+          </div>
+          <div class="md:col-span-4 flex justify-end">
+            <button type="submit"
+                    class="bg-black text-white px-4 py-2 rounded-lg hover:bg-lime-700 text-xs md:text-sm w-full md:w-auto">
+              Dodaj jednostkę
+            </button>
+          </div>
+        </form>
+
+        <!-- Lista działów -->
+        <div class="w-full overflow-x-auto">
+          <table class="min-w-full text-xs md:text-sm text-left border-t border-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-3 py-2 whitespace-nowrap">ID</th>
+                <th class="px-3 py-2 whitespace-nowrap">Nazwa</th>
+                <th class="px-3 py-2 whitespace-nowrap">Kod</th>
+                <th class="px-3 py-2 whitespace-nowrap">Rodzic</th>
+                <th class="px-3 py-2 whitespace-nowrap text-center">Podjednostki</th>
+                <th class="px-3 py-2 whitespace-nowrap">Akcje</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-if="orgs.length === 0">
+                <tr>
+                  <td colspan="6" class="px-3 py-4 text-center text-gray-500">
+                    Brak jednostek organizacyjnych. Dodaj pierwszą jednostkę powyżej.
+                  </td>
+                </tr>
+              </template>
+
+              <template x-for="unit in orgs" :key="unit.id">
+                <tr class="border-b"
+                    :class="selectedUnit && selectedUnit.id === unit.id ? 'bg-lime-50/60' : 'hover:bg-gray-50'">
+                  <td class="px-3 py-2 text-gray-700 whitespace-nowrap" x-text="unit.id"></td>
+                  <td class="px-3 py-2 font-medium text-gray-900" x-text="unit.name"></td>
+                  <td class="px-3 py-2 text-gray-500 whitespace-nowrap" x-text="unit.code"></td>
+                  <td class="px-3 py-2 text-gray-500 whitespace-nowrap" x-text="parentName(unit) || '—'"></td>
+                  <td class="px-3 py-2 text-center">
+                    <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-[11px] md:text-xs"
+                          x-text="childrenCount(unit.id)"></span>
+                  </td>
+                  <td class="px-3 py-2">
+                    <button @click="selectUnit(unit)"
+                            class="text-lime-700 hover:underline text-xs md:text-sm">
+                      Zarządzaj
+                    </button>
+		      <button type="button"
+            @click.stop="deleteUnit(unit.id)"
+            class="px-2 py-1 text-[11px] md:text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50">
+      Usuń
+    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- PRAWA KOLUMNA: SZCZEGÓŁY + EDYCJA + KIEROWNIK -->
+      <div class="space-y-4 md:space-y-6">
+
+        <template x-if="selectedUnit">
+          <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-4 md:space-y-5">
+            <header class="space-y-1">
+              <h3 class="text-base md:text-lg font-semibold text-gray-900">
+                Jednostka:
+                <span x-text="selectedUnit.name"></span>
+                (<span x-text="selectedUnit.code"></span>)
+              </h3>
+              <p class="text-xs md:text-sm text-gray-500">
+                Rodzic:
+                <span x-text="parentName(selectedUnit) || 'brak (root)'"></span>
+              </p>
+
+              <p class="text-xs md:text-sm text-gray-600" x-show="selectedUnitManager">
+                Kierownik jednostki:
+                <span class="font-semibold" x-text="userLabel(selectedUnitManager)"></span>
+              </p>
+              <p class="text-xs md:text-sm text-gray-400" x-show="!selectedUnitManager">
+                Kierownik jednostki nie jest ustawiony.
+              </p>
+            </header>
+
+            <!-- EDYCJA JEDNOSTKI -->
+            <div class="border border-gray-100 rounded-xl p-3 md:p-4 space-y-3">
+              <h4 class="font-medium text-gray-800 text-sm md:text-base">Edycja jednostki</h4>
+              <form class="grid grid-cols-1 gap-2 md:gap-3" @submit.prevent="updateUnit()">
+                <div>
+                  <label class="block text-xs text-gray-600 mb-1">Nazwa</label>
+                  <input type="text" x-model="editUnit.name"
+                         class="w-full border px-3 py-2 rounded-lg text-sm" required />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-600 mb-1">Kod</label>
+                  <input type="text" x-model="editUnit.code"
+                         class="w-full border px-3 py-2 rounded-lg text-sm" required />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-600 mb-1">Rodzic</label>
+                  <select x-model="editUnit.parent_id"
+                          class="w-full border px-3 py-2 rounded-lg text-xs md:text-sm">
+                    <option value="">— brak (korzeń) —</option>
+                    <template x-for="u in orgs" :key="'edit-parent-' + u.id">
+                      <template x-if="Number(u.id) !== Number(editUnit.id)">
+                        <option :value="String(u.id)" x-text="u.name + ' (#' + u.id + ')'"></option>
+                      </template>
+                    </template>
+                  </select>
+                </div>
+                <div class="flex justify-end pt-1">
+                  <button class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 text-xs md:text-sm w-full">
+                    Zapisz zmiany jednostki
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- USTAW MANAGERA -->
+            <div class="border border-gray-100 rounded-xl p-3 md:p-4 space-y-3">
+              <h4 class="font-medium text-gray-800 text-sm md:text-base">Ustaw kierownika</h4>
+              <form class="space-y-2" @submit.prevent="setManager()">
+                <label class="block text-xs md:text-sm text-gray-700 mb-1">Kierownik</label>
+                <select x-model="manager.user_id"
+                        class="w-full border px-3 py-2 rounded-lg text-sm">
+                  <option value="">— wybierz użytkownika —</option>
+                  <template x-for="u in users" :key="'mgr-' + u.id">
+                    <option :value="String(u.id)"
+                            x-text="userLabel(u) + (selectedUnitManager && selectedUnitManager.id === u.id ? ' (obecny)' : '')">
+                    </option>
+                  </template>
+                </select>
+
+                <button class="bg-black text-white px-4 py-2 rounded-lg hover:bg-lime-700 text-xs md:text-sm w-full">
+                  Ustaw
+                </button>
+              </form>
+            </div>
+          </section>
+        </template>
+
+        <template x-if="!selectedUnit">
+          <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6">
+            <div class="text-xs md:text-sm text-gray-500">
+              Wybierz jednostkę z listy po lewej, aby przejść do edycji i ustawienia menedżera.
+            </div>
+          </section>
+        </template>
+
+      </div>
+    </div>
+
+    <!-- PRIMARY przypisania + wyszukiwarka -->
+    <section class="bg-white shadow-sm rounded-2xl border border-gray-200 p-4 md:p-6 space-y-3 md:space-y-4">
+      <header class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <h4 class="font-medium text-gray-800 text-sm md:text-base">
+            Przypisania użytkowników do jednostek:
+          </h4>
+        </div>
+
+        <div class="w-full md:max-w-sm">
+          <label class="block text-[11px] md:text-xs text-gray-600 mb-1">Szukaj użytkownika</label>
+          <div class="relative">
+            <div class="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+            </div>
+            <input type="text"
+                   x-model="userSearch"
+                   placeholder="Imię, nazwisko, login lub #ID"
+                   class="w-full border rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500" />
+          </div>
+          <p class="mt-1 text-[11px] text-gray-400">
+            Filtrowanie: imię/nazwisko, username, ID (wspiera też „#123”).
+          </p>
+        </div>
+      </header>
+
+      <div class="w-full overflow-x-auto">
+        <table class="min-w-full text-xs md:text-sm text-left border-t border-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-3 py-2 whitespace-nowrap">Użytkownik</th>
+              <th class="px-3 py-2 whitespace-nowrap">Aktualna jednostka (primary)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-if="users.length === 0">
+              <tr>
+                <td colspan="2" class="px-3 py-4 text-center text-gray-500">
+                  Brak danych użytkowników.
+                </td>
+              </tr>
+            </template>
+
+            <template x-if="users.length > 0 && filteredUsersForPrimary.length === 0">
+              <tr>
+                <td colspan="2" class="px-3 py-4 text-center text-gray-400">
+                  Brak wyników dla podanego wyszukiwania.
+                </td>
+              </tr>
+            </template>
+
+            <!-- FIX: value selecta ustawiamy dopiero po wyrenderowaniu opcji (nextTick) -->
+            <template x-for="u in filteredUsersForPrimary" :key="'primary-' + u.id">
+              <tr class="border-b hover:bg-gray-50">
+                <td class="px-3 py-2">
+                  <div class="font-medium text-gray-900" x-text="userLabel(u)"></div>
+                </td>
+                <td class="px-3 py-2">
+                  <select
+                    class="w-full border px-2 py-1 rounded-lg text-xs md:text-sm"
+                    x-init="applyPrimarySelect($el, u.id)"
+                    x-effect="applyPrimarySelect($el, u.id)"
+                    @change="onChangeUserOrg(u.id, $event.target.value)">
+                    <option value="">— brak przypisania —</option>
+                    <template x-for="unit in orgs" :key="'sel-org-' + unit.id">
+                      <option :value="String(unit.id)" x-text="unit.name + ' (#' + unit.id + ')'"></option>
+                    </template>
+                  </select>
+                </td>
+              </tr>
+            </template>
+
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Jeśli user nie ma uprawnień do zarządzania -->
+  <div x-show="activeTab === 'manage' && !canManage" x-transition class="mt-4">
+    <div class="rounded-xl border border-yellow-200 bg-yellow-50 text-yellow-800 px-4 py-3 text-xs md:text-sm">
+      Nie masz uprawnień do zarządzania organizacją.
+    </div>
+  </div>
+</div>
+
+<script>
+  function buildTree(root, all) {
+    const map = {};
+    all.forEach(item => {
+      map[item.id] = {
+        HTMLclass: "org-node",
+        innerHTML:
+          "<span class='node-name'>" + (item.name || "") + "</span>" +
+          "<span class='node-title'>" + (item.code || "") + "</span>",
+        children: []
+      };
+    });
+    all.forEach(item => {
+      if (item.parent_id !== null && map[item.parent_id]) {
+        map[item.parent_id].children.push(map[item.id]);
+      }
+    });
+    return map[root.id];
+  }
+
+  async function renderTrees(orgs) {
+    const roots = orgs.filter(o => o.parent_id === null);
+    const container = document.getElementById("org-trees");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (!roots.length) {
+      const info = document.createElement("p");
+      info.className = "text-xs md:text-sm text-gray-500";
+      info.textContent = "Brak danych do zbudowania drzewa organizacji.";
+      container.appendChild(info);
+      return;
+    }
+
+    roots.forEach((root, idx) => {
+      const treeContainer = document.createElement("div");
+      treeContainer.id = "tree-" + idx;
+      treeContainer.className = "chart";
+      container.appendChild(treeContainer);
+
+      new Treant({
+        chart: {
+          container: "#" + treeContainer.id,
+          nodeAlign: "BOTTOM",
+          connectors: { type: "step" },
+          levelSeparation: 80,
+          siblingSeparation: 80,
+          subTeeSeparation: 80,
+          scrollbar: "native"
+        },
+        nodeStructure: buildTree(root, orgs)
+      });
+    });
+  }
+
+  function organizationPage({ userId, canManage }) {
+    return {
+      userId: Number(userId || 0),
+      canManage: !!canManage,
+
+      activeTab: 'standard',
+
+      orgs: [],
+      users: [],
+      memberships: [],
+
+      // źródło prawdy dla primary
+      primaryOrg: {},
+
+      myUnitManager: null,
+
+      userSearch: '',
+
+      newUnit: { name: '', code: '', parent_id: '' },
+      selectedUnit: null,
+      selectedUnitManager: null,
+      editUnit: { id: null, name: '', code: '', parent_id: '' },
+
+      manager: { user_id: '', user_id_manual: '', is_default: false },
+
+      flash: { text: '', ok: true },
+
+      setFlash(text, ok = true) {
+        this.flash = { text, ok };
+        if (text) setTimeout(() => { this.flash.text = ''; }, 5000);
+      },
+
+      primaryFor(userId) {
+        const v = this.primaryOrg[userId];
+        return v ? String(v) : '';
+      },
+
+      // kluczowa funkcja: ustaw select dopiero po wyrenderowaniu opcji
+      applyPrimarySelect(el, userId) {
+        const v = this.primaryFor(userId);
+        this.$nextTick(() => {
+          try { el.value = String(v || ''); } catch (_) {}
+        });
+      },
+
+      async init() {
+        this.$watch('activeTab', (v) => {
+          if (v === 'manage' && !this.canManage) {
+            this.activeTab = 'standard';
+            this.setFlash('Brak uprawnień do zarządzania organizacją.', false);
+            return;
+          }
+          if (v === 'standard') {
+            this.$nextTick(() => renderTrees(this.orgs));
+          }
+        });
+
+        await this.reloadAll(false);
+      },
+
+      async reloadAll(showFlash) {
+        try {
+          await Promise.all([this.reload(), this.loadUsers(), this.loadMemberships()]);
+          await this.loadMyUnitManager();
+
+          if (showFlash) this.setFlash('✅ Odświeżono dane', true);
+
+          if (this.activeTab === 'standard') {
+            this.$nextTick(() => renderTrees(this.orgs));
+          }
+        } catch (e) {
+          if (showFlash) this.setFlash('Nie udało się odświeżyć danych.', false);
+        }
+      },
+
+      async reload() {
+        const res = await fetch('/api/org');
+        const json = await res.json();
+        this.orgs = json.data || [];
+
+        if (this.selectedUnit) {
+          const fresh = this.orgs.find(o => o.id === this.selectedUnit.id);
+          if (fresh) {
+            this.selectUnit(fresh);
+          } else {
+            this.selectedUnit = null;
+            this.selectedUnitManager = null;
+          }
+        }
+      },
+
+      async loadUsers() {
+        try {
+          const res = await fetch('/api/users');
+          const json = await res.json();
+          this.users = json.data || [];
+        } catch (e) {
+          this.users = [];
+        }
+      },
+
+      async loadMemberships() {
+        try {
+          const res = await fetch('/api/org/user-memberships');
+          const json = await res.json();
+          this.memberships = json.data || [];
+
+          const next = {};
+          this.memberships.forEach(m => {
+            if (m.is_primary) next[m.user_id] = String(m.org_unit_id);
+          });
+          this.primaryOrg = next;
+        } catch (e) {
+          this.memberships = [];
+          this.primaryOrg = {};
+        }
+      },
+
+      get myPrimaryUnitId() {
+        return Number(this.primaryOrg[this.userId] || 0);
+      },
+
+      get myPrimaryUnit() {
+        if (!this.myPrimaryUnitId) return null;
+        return this.orgs.find(o => Number(o.id) === Number(this.myPrimaryUnitId)) || null;
+      },
+
+      get myPrimaryUnitName() {
+        return this.myPrimaryUnit ? this.myPrimaryUnit.name : '';
+      },
+
+      get myPrimaryUnitCode() {
+        return this.myPrimaryUnit ? this.myPrimaryUnit.code : '';
+      },
+
+      get teamMembers() {
+        const unitId = Number(this.myPrimaryUnitId || 0);
+        if (!unitId) return [];
+
+        const members = this.memberships.filter(m => Number(m.org_unit_id) === unitId);
+        const memByUser = {};
+        members.forEach(m => { memByUser[m.user_id] = m; });
+
+        const team = this.users
+          .filter(u => memByUser[u.id])
+          .map(u => ({ user: u, membership: memByUser[u.id] }));
+
+        team.sort((a, b) => {
+          if (a.user.id === this.userId) return -1;
+          if (b.user.id === this.userId) return 1;
+          const an = (this.userLabel(a.user) || '').toLowerCase();
+          const bn = (this.userLabel(b.user) || '').toLowerCase();
+          return an.localeCompare(bn);
+        });
+
+        return team;
+      },
+
+      get filteredUsersForPrimary() {
+        const q = (this.userSearch || '').trim().toLowerCase();
+        if (!q) return this.users;
+
+        const q2 = q.startsWith('#') ? q.slice(1) : q;
+
+        return this.users.filter(u => {
+          const id = String(u.id || '');
+          const username = String(u.username || '').toLowerCase();
+          const name = String(u.Name || '').toLowerCase();
+          const surname = String(u.Surname || '').toLowerCase();
+          const full = (name + ' ' + surname).trim();
+
+          return (
+            id.includes(q2) ||
+            username.includes(q) ||
+            name.includes(q) ||
+            surname.includes(q) ||
+            full.includes(q)
+          );
+        });
+      },
+
+      scrollToTree() {
+        const el = document.getElementById('org-tree-card');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+
+      renderTreeNow() {
+        this.$nextTick(() => renderTrees(this.orgs));
+      },
+
+      parentName(unit) {
+        if (!unit || !unit.parent_id) return null;
+        const parent = this.orgs.find(o => o.id === unit.parent_id);
+        return parent ? parent.name : null;
+      },
+
+      childrenCount(id) {
+        return this.orgs.filter(o => o.parent_id === id).length;
+      },
+
+      userLabel(u) {
+        if (!u) return '';
+        const parts = [];
+        if (u.Name || u.Surname) parts.push((u.Name || '') + ' ' + (u.Surname || ''));
+        if (u.username) parts.push('[' + u.username + ']');
+        parts.push('#' + u.id);
+        return parts.join(' ');
+      },
+
+      async loadManagerForUnit(orgUnitId, target = 'selected') {
+        try {
+          const res = await fetch('/api/org/manager/unit/' + orgUnitId);
+          const json = await res.json();
+          const mgrId = json && json.manager_id ? Number(json.manager_id) : 0;
+
+          const mgr = mgrId
+            ? (this.users.find(u => u.id === mgrId) || { id: mgrId, username: '', Name: '', Surname: '' })
+            : null;
+
+          if (target === 'selected') {
+            this.selectedUnitManager = mgr;
+            this.manager.user_id = mgrId ? String(mgrId) : '';
+          } else {
+            this.myUnitManager = mgr;
+          }
+        } catch (e) {
+          if (target === 'selected') this.selectedUnitManager = null;
+          else this.myUnitManager = null;
+        }
+      },
+
+async deleteUnit(orgId) {
+  const id = Number(orgId || 0);
+  if (!id) return;
+
+  if (!confirm('Na pewno usunąć tę jednostkę?')) return;
+
+  try {
+    const res = await fetch(`/api/org/${id}`, {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    let body = {};
+    let text = '';
+
+    if (ct.includes('application/json')) {
+      body = await res.json().catch(() => ({}));
+    } else {
+      text = await res.text().catch(() => '');
+    }
+
+    if (!res.ok) {
+      const msg = (body && (body.error || body.message)) ? (body.error || body.message) : (text || 'Nie udało się usunąć jednostki');
+      throw new Error(msg);
+    }
+
+    // jeśli usunęliśmy aktualnie wybraną jednostkę — czyścimy panel po prawej
+    if (this.selectedUnit && Number(this.selectedUnit.id) === id) {
+      this.selectedUnit = null;
+      this.selectedUnitManager = null;
+    }
+
+    this.setFlash(body.message || '✅ Usunięto Jednostkę', true);
+    await this.reloadAll(false);
+  } catch (e) {
+    this.setFlash(e?.message || 'Nie udało się usunąć jednostki', false);
+  }
+},
+
+
+
+
+
+
+      async loadMyUnitManager() {
+        this.myUnitManager = null;
+        if (!this.myPrimaryUnitId) return;
+        await this.loadManagerForUnit(this.myPrimaryUnitId, 'my');
+      },
+
+      selectUnit(unit) {
+        this.selectedUnit = unit;
+        this.editUnit.id = unit.id;
+        this.editUnit.name = unit.name;
+        this.editUnit.code = unit.code;
+        this.editUnit.parent_id = unit.parent_id || '';
+        this.loadManagerForUnit(unit.id, 'selected');
+      },
+
+      async addUnit() {
+        try {
+          const payload = {
+            name: this.newUnit.name,
+            code: this.newUnit.code,
+            parent_id: this.newUnit.parent_id ? Number(this.newUnit.parent_id) : null,
+          };
+          const res = await fetch('/api/org/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error('Nie udało się dodać jednostki');
+          this.setFlash('✅ Dodano jednostkę', true);
+          this.newUnit = { name: '', code: '', parent_id: '' };
+          await this.reloadAll(false);
+        } catch (e) {
+          this.setFlash(e?.message || 'Nie udało się dodać jednostki', false);
+        }
+      },
+
+      async updateUnit() {
+        if (!this.editUnit.id) return;
+        try {
+          const payload = {
+            id: this.editUnit.id,
+            name: this.editUnit.name,
+            code: this.editUnit.code,
+            parent_id: this.editUnit.parent_id ? Number(this.editUnit.parent_id) : null,
+          };
+          const res = await fetch('/api/org/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error('Nie udało się zaktualizować jednostki');
+          this.setFlash('✅ Zaktualizowano jednostkę', true);
+          await this.reloadAll(false);
+        } catch (e) {
+          this.setFlash(e?.message || 'Nie udało się zaktualizować jednostki', false);
+        }
+      },
+
+      async setManager() {
+        if (!this.selectedUnit) return;
+        try {
+          let userId = this.manager.user_id || this.manager.user_id_manual;
+          userId = Number(userId);
+          if (!userId) throw new Error('Brak ID Kierownika');
+
+          const body = {
+            org_unit_id: this.selectedUnit.id,
+            user_id: userId,
+            is_default: true
+          };
+          const res = await fetch('/api/org/manager', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) throw new Error('Nie udało się ustawić Kierownika');
+          this.setFlash('Kierownik ustawiony!', true);
+          this.manager = { user_id: '', user_id_manual: '', is_default: false };
+          await this.loadManagerForUnit(this.selectedUnit.id, 'selected');
+          await this.loadMyUnitManager();
+        } catch (e) {
+          this.setFlash(e?.message || 'Nie udało się ustawić kierownika', false);
+        }
+      },
+
+      async onChangeUserOrg(userId, orgUnitId) {
+        const prev = this.primaryOrg[userId] || '';
+        const next = String(orgUnitId || '');
+
+        // jeśli nie wspierasz odpinania, cofamy
+        if (!next) {
+          this.primaryOrg[userId] = prev;
+          return;
+        }
+
+        // optymistycznie ustawiamy mapę (UI pokaże od razu)
+        this.primaryOrg[userId] = next;
+
+        try {
+          const unitIdNum = Number(next);
+          if (!unitIdNum) throw new Error('Nieprawidłowe ID jednostki');
+
+          const body = {
+            user_id: userId,
+            org_unit_id: unitIdNum,
+            title: 'Pracownik',
+            is_primary: true,
+          };
+
+          const res = await fetch('/api/org/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+
+          if (!res.ok) throw new Error('Nie udało się zaktualizować przypisania użytkownika');
+
+          // backend jako źródło prawdy
+          await this.loadMemberships();
+          await this.loadMyUnitManager();
+        } catch (e) {
+          // revert
+          this.primaryOrg[userId] = prev;
+          this.setFlash(e?.message || 'Nie udało się zaktualizować przypisania użytkownika', false);
+        }
+      },
+    }
+  }
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

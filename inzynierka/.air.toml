@@ -1,0 +1,14 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # ZMIANA 1: Flagi -gcflags='all=-N -l' wyłączają optymalizację kodu, żeby debugger się nie gubił
+  cmd = "go build -gcflags='all=-N -l' -o ./tmp/main ./cmd/main.go"
+  
+  # ZMIANA 2: Używamy full_bin, żeby uruchomić skompilowany plik przez debuggera Delve (dlv)
+  full_bin = "dlv exec ./tmp/main --listen=:2345 --headless=true --api-version=2 --accept-multiclient --continue"
+  
+  # Reszta Twoich ustawień zostaje bez zmian!
+  include_dir = ["cmd", "internal", "pkg"]
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  exclude_dir = ["assets", "tmp", "vendor"]

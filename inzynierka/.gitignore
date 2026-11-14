@@ -1,0 +1,45 @@
+# Pliki binarne i kompilacji
+main
+serwer
+/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+.gopath/
+.gocache/
+
+# Konfiguracja środowiskowa z sekretami
+.env
+.env.*
+!.env.example
+
+# Zależności frontendowe
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archiwa
+*.zip
+*.tar.gz
+
+# Logi
+*.log
+tmp/
+
+# Wygenerowane raporty i zrzuty wykresów
+raports/*.png
+raports/*.pdf
+!raports/qr_*.png
+!raports/chart.png
+
+# Narzędzia IDE i systemowe
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

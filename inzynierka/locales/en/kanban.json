@@ -1,0 +1,21 @@
+{
+  "title": "Kanban Task Board",
+  "new_ticket": "New Task",
+  "task_list": "Task List",
+  "settlements": "Settlements",
+  "search_placeholder": "Search (title, description)...",
+  "todo": "To Do",
+  "in_progress": "In Progress",
+  "done": "Done",
+  "backlog": "Backlog / Ideas",
+  "blocked": "Blocked",
+  "cancelled": "Cancelled",
+  "priority": "Priority",
+  "priority_low": "Low",
+  "priority_medium": "Medium",
+  "priority_high": "High",
+  "priority_urgent": "Urgent",
+  "title_placeholder": "Task title",
+  "desc_placeholder": "Task description...",
+  "empty_column": "No tasks in this column"
+}

@@ -1,0 +1,275 @@
+{{ define "user_schedule_weeks.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-4xl mx-auto p-4 md:p-6 space-y-6"
+     x-data="weeklyTerms({ userId: {{ .TargetUser.ID }} })"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header>
+    <p class="hidden sm:block text-xs md:text-sm text-gray-600">
+      Lista przedziałów czasowych, w których obowiązywały konkretne grafiki.
+    </p>
+  </header>
+
+  <!-- ALERTY (spójnie: error/success) -->
+  <template x-if="error">
+    <div class="p-3 md:p-4 rounded-xl border border-red-300 bg-red-50 text-xs md:text-sm text-red-800 flex items-start gap-2">
+      <span class="mt-0.5"></span>
+      <span x-text="error"></span>
+    </div>
+  </template>
+  <template x-if="success">
+    <div class="p-3 md:p-4 rounded-xl border border-green-300 bg-green-50 text-xs md:text-sm text-green-800 flex items-start gap-2">
+      <span class="mt-0.5">✔</span>
+      <span x-text="success"></span>
+    </div>
+  </template>
+
+  <!-- tabela okresów -->
+  <section class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+    <div class="w-full overflow-x-auto">
+      <table class="min-w-full text-xs md:text-sm">
+        <thead class="bg-gray-100 text-gray-700 uppercase text-[10px] md:text-xs">
+          <tr>
+            <th class="p-2 text-left whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('schedule.effective_from', 'Od') : 'Od'">Od</th>
+            <th class="p-2 text-left whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('schedule.effective_to', 'Do') : 'Do'">Do</th>
+            <th class="p-2 text-left whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('common.actions', 'Akcje') : 'Akcje'">Akcje</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="terms.length === 0">
+            <tr>
+              <td colspan="3" class="p-4 text-center text-gray-500 text-xs md:text-sm" x-text="$store.i18n ? $store.i18n.t('schedule.no_terms', 'Brak zapisanych okresów grafików.') : 'Brak zapisanych okresów grafików.'">
+                Brak zapisanych okresów grafików.
+              </td>
+            </tr>
+          </template>
+
+          <template x-for="t in sortedTerms" :key="t.effective_from + '-' + (t.effective_to || 'null')">
+            <tr class="border-t hover:bg-gray-50">
+              <td class="p-2 font-medium" x-text="formatDate(t.effective_from)"></td>
+              <td class="p-2" x-text="t.effective_to ? formatDate(t.effective_to) : '-'"></td>
+              <td class="p-2">
+                <div class="flex flex-wrap gap-2 items-center">
+
+                  <a :href="`/app/user/${userId}/schedule/week/${encodeURIComponent(t.effective_from + '|' + (t.effective_to || 'null'))}`"
+                     class="text-lime-600 hover:underline text-xs md:text-sm">
+                    {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+                      <span x-text="$store.i18n ? $store.i18n.t('common.edit', 'Edytuj') : 'Edytuj'">Edytuj</span>
+                    {{else}}
+                      <span x-text="$store.i18n ? $store.i18n.t('common.details', 'Podgląd') : 'Podgląd'">Podgląd</span>
+                    {{end}}
+                  </a>
+
+                  {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+                  <button type="button"
+                          class="px-2 py-1 text-[11px] md:text-xs border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
+                          @click="remove(t)">
+                    Usuń
+                  </button>
+                  {{else}}
+                  {{end}}
+
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}
+  <!-- formularz dodania -->
+  <section class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 md:p-5">
+    <h2 class="text-base md:text-lg font-semibold mb-3">Dodaj nowy okres grafiku</h2>
+    <form class="grid grid-cols-1 md:grid-cols-2 gap-4" @submit.prevent="add">
+      <div>
+        <label class="block text-xs md:text-sm font-medium mb-1">Od</label>
+        <input type="date" x-model="newTerm.effective_from"
+               class="p-2 border rounded-lg w-full text-sm" required />
+      </div>
+      <div>
+        <label class="block text-xs md:text-sm font-medium mb-1">Do</label>
+        <input type="date" x-model="newTerm.effective_to"
+               class="p-2 border rounded-lg w-full text-sm" />
+      </div>
+      <div class="md:col-span-2 flex justify-end mt-2">
+        <button class="px-4 py-2 bg-black text-white rounded-lg hover:bg-lime-500 text-xs md:text-sm w-full sm:w-auto">
+          Dodaj
+        </button>
+      </div>
+    </form>
+  </section>
+  {{else}}
+  {{end}}
+
+</div>
+
+<script>
+function weeklyTerms({ userId }) {
+  return {
+    userId,
+    terms: [],
+    newTerm: { effective_from: '', effective_to: '' },
+
+    error: null,
+    success: null,
+
+    setMsg(type, text) {
+      if (type === 'error') {
+        this.error = text || 'Wystąpił błąd.';
+        this.success = null;
+      } else {
+        this.success = text || 'Operacja wykonana.';
+        this.error = null;
+      }
+      if (text) {
+        setTimeout(() => {
+          // nie czyść jeśli w międzyczasie ustawiono inny komunikat
+          if (type === 'error' && this.error === text) this.error = null;
+          if (type === 'success' && this.success === text) this.success = null;
+        }, 5000);
+      }
+    },
+
+    // spójne parsowanie odpowiedzi API: {error}, {message}, {data}
+    async parseApi(res) {
+      let data = null;
+      try { data = await res.json(); } catch (_) { data = null; }
+
+      const err = data && typeof data === 'object' ? (data.error || null) : null;
+      const okMsg = data && typeof data === 'object' ? (data.message || data.data || null) : null;
+
+      return { data, err, okMsg };
+    },
+
+    buildWeekParam(t) {
+      const from = t?.effective_from || '';
+      const to = t?.effective_to || 'null';
+      return encodeURIComponent(`${from}|${to}`);
+    },
+
+    async init() {
+      await this.load();
+    },
+
+    async load() {
+      this.error = null;
+      this.success = null;
+
+      try {
+        const res = await fetch(`/api/user/${this.userId}/schedule/weekly`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) {
+          const parsed = await this.parseApi(res);
+          const msg = parsed.err || parsed.okMsg || `Nie udało się pobrać listy okresów (HTTP ${res.status})`;
+          throw new Error(msg);
+        }
+        const json = await res.json().catch(() => ({}));
+        this.terms = json.data || [];
+      } catch (e) {
+        console.error(e);
+        this.setMsg('error', e?.message || 'Błąd podczas ładowania okresów grafików');
+      }
+    },
+
+    get sortedTerms() {
+      // sortowanie po effective_from rosnąco
+      return this.terms.slice().sort((a, b) => {
+        return new Date(a.effective_from) - new Date(b.effective_from);
+      });
+    },
+
+    formatDate(dateStr) {
+      if (!dateStr) return '-';
+      try {
+        const d = new Date(dateStr);
+        return d.toISOString().split('T')[0];
+      } catch {
+        return dateStr;
+      }
+    },
+
+    async add() {
+      this.error = null;
+      this.success = null;
+
+      const from = this.newTerm.effective_from;
+      const to = this.newTerm.effective_to || 'null';
+
+      if (!from) {
+        this.setMsg('error', 'Musisz wybrać datę rozpoczęcia (Od).');
+        return;
+      }
+
+      const weekParam = encodeURIComponent(`${from}|${to}`);
+      const url = `/api/user/${this.userId}/schedule/weekly/${weekParam}`;
+
+      try {
+        const res = await fetch(url, { method: 'POST', headers: { 'Accept': 'application/json' } });
+        const parsed = await this.parseApi(res);
+
+        if (parsed.err) {
+          this.setMsg('error', parsed.err);
+          return;
+        }
+        if (!res.ok) {
+          this.setMsg('error', parsed.okMsg || 'Nie udało się dodać okresu');
+          return;
+        }
+
+        // pokaż odpowiedź API, ale też przekieruj do edycji
+        this.setMsg('success', parsed.okMsg || 'Dodano okres grafiku.');
+        this.newTerm = { effective_from: '', effective_to: '' };
+
+        // krótka kolejka zdarzeń, aby użytkownik zobaczył komunikat; redirect i tak przejmie UI
+        window.location.href = `/app/user/${this.userId}/schedule/week/${weekParam}`;
+      } catch (e) {
+        console.error(e);
+        this.setMsg('error', e?.message || 'Błąd dodawania okresu');
+      }
+    },
+
+    async remove(t) {
+      this.error = null;
+      this.success = null;
+
+      const weekParam = this.buildWeekParam(t);
+      if (!weekParam) return;
+
+      const label = `${this.formatDate(t.effective_from)} – ${t.effective_to ? this.formatDate(t.effective_to) : '∞'}`;
+      const ok = confirm(`Na pewno usunąć okres grafiku: ${label}?`);
+      if (!ok) return;
+
+      try {
+        const url = `/api/user/${this.userId}/schedule/weekly/${weekParam}`;
+        const res = await fetch(url, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
+        const parsed = await this.parseApi(res);
+
+        // czasem backend zwraca {error:"..."} mimo 200
+        if (parsed.err) {
+          this.setMsg('error', parsed.err);
+          return;
+        }
+        if (!res.ok) {
+          this.setMsg('error', parsed.okMsg || `Nie udało się usunąć okresu (HTTP ${res.status})`);
+          return;
+        }
+
+        this.setMsg('success', parsed.okMsg || 'Usunięto okres grafiku.');
+        await this.load();
+      } catch (e) {
+        console.error(e);
+        this.setMsg('error', e?.message || 'Błąd podczas usuwania okresu');
+      }
+    }
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

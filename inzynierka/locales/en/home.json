@@ -1,0 +1,10 @@
+{
+  "hero_title": "Record and analyze working time in one place",
+  "hero_desc": "System designed for Small and Medium Enterprises. Compliant with Polish Labor Code regulations (rest periods, night work intervals).",
+  "module_schedule_title": "Module – Work Schedules",
+  "module_schedule_desc": "Manage, analyze, and plan shifts that transform how your organization operates.",
+  "module_org_title": "Module – Organization",
+  "module_org_desc": "Model company structure, departments, teams, and multi-level approval workflows.",
+  "module_api_title": "Module – Developer API",
+  "module_api_desc": "Modern, fully documented REST API specification and Swagger for developers."
+}

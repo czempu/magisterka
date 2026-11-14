@@ -1,0 +1,163 @@
+{{ define "userdetails.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-3xl mx-auto p-4 md:p-6"
+     x-data="userDetailsPage({ userId: {{ .TargetUser.ID }} })"
+     x-init="init()">
+
+  <!-- Flash -->
+  <div x-show="flash.text" x-transition
+       class="mb-4 rounded-xl border px-4 py-3 text-xs md:text-sm"
+       :class="flash.ok ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'">
+    <div class="font-medium" x-text="flash.text"></div>
+  </div>
+
+  <section class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+    <form class="p-4 md:p-6 space-y-6" @submit.prevent="save()">
+      <div class="space-y-3 md:space-y-4">
+        <template x-if="error">
+          <div class="rounded-lg border border-red-200 bg-red-50 text-red-800 p-3 text-xs md:text-sm" x-text="error"></div>
+        </template>
+
+        <!-- Form fields -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div class="md:col-span-2">
+            <label for="username" class="block text-xs md:text-sm font-medium text-gray-900">Nazwa użytkownika</label>
+            <input type="text" id="username" x-model="userData.Username"
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm
+                          focus:outline-none focus:ring-lime-500 focus:border-lime-500 text-sm" />
+          </div>
+
+          <div class="md:col-span-2">
+            <label for="email" class="block text-xs md:text-sm font-medium text-gray-900">Email</label>
+            <input type="email" id="email" x-model="userData.Email"
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm
+                          focus:outline-none focus:ring-lime-500 focus:border-lime-500 text-sm" />
+          </div>
+
+		          <div class="md:col-span-2">
+            <label for="name" class="block text-xs md:text-sm font-medium text-gray-900">Imie</label>
+            <input type="text" id="name" x-model="userData.Name"
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm
+                          focus:outline-none focus:ring-lime-500 focus:border-lime-500 text-sm" />
+          </div>
+
+	            <div class="md:col-span-2">
+            <label for="surname" class="block text-xs md:text-sm font-medium text-gray-900">Nazwisko</label>
+            <input type="text" id="surname" x-model="userData.Surname"
+                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm
+                          focus:outline-none focus:ring-lime-500 focus:border-lime-500 text-sm" />
+          </div>
+
+
+
+
+
+
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-100 pt-4">
+        <div class="flex flex-col sm:flex-row w-full sm:w-auto gap-2 sm:gap-3">
+          <button type="button"
+                  class="px-4 py-2 rounded-xl border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs md:text-sm w-full sm:w-auto"
+                  @click="reload()" :disabled="loading">
+            Odśwież
+          </button>
+
+          <button type="submit"
+                  class="px-5 py-2 rounded-xl bg-black text-white hover:bg-lime-500
+                         disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-sm w-full sm:w-auto"
+                  :disabled="loading">
+            Zapisz zmiany
+          </button>
+        </div>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+  function userDetailsPage({ userId }) {
+    return {
+      userId: String(userId),
+      userData: {
+        Username: '',
+        Email: '',
+        IsEmployee: 0,
+        CountryCode: '',
+        NominalDayMinutes: 0,
+        Timezone: ''
+      },
+      loading: true,
+      error: '',
+      flash: { ok: true, text: '' },
+
+      async init() {
+        await this.reload();
+      },
+
+      // GET /api/user/:id/details
+      async reload() {
+        this.loading = true;
+        this.error = '';
+        // NIE czyścimy flasha tutaj, żeby sukces nie znikał od razu po save()->reload()
+        try {
+          const res = await fetch('/api/user/' + this.userId + '/details');
+          if (!res.ok) throw new Error('Błąd pobierania danych użytkownika');
+
+          const userJson = await res.json();
+          this.userData = userJson.data;
+        } catch (e) {
+          this.error = e?.message || 'Nie udało się pobrać danych użytkownika';
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      // POST JSON /api/user/:id/details/edit
+      async save() {
+        try {
+          this.loading = true;
+          this.error = '';
+          this.flash.text = '';
+
+          const dataToSend = {
+            ...this.userData,
+            IsEmployee: this.userData.IsEmployee ? 1 : 0,
+            NominalDayMinutes: Number(this.userData.NominalDayMinutes)
+          };
+
+          const res = await fetch('/api/user/' + this.userId + '/details/edit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSend)
+          });
+
+          let j = null;
+          try { j = await res.json(); } catch { j = null; }
+
+          if (!res.ok) {
+            const msg = (j?.message || j?.error) ? (j.message || j.error) : 'Zapis nieudany';
+            throw new Error(msg);
+          }
+
+          this.flash = { ok: true, text: (j?.message ? j.message : '✅ Zapisano zmiany') };
+
+          // odśwież dane, ale bez czyszczenia flasha (reload() nie czyści)
+          await this.reload();
+
+        } catch (e) {
+          this.flash = { ok: false, text: '' + (e?.message || 'Zapis nieudany') };
+        } finally {
+          this.loading = false;
+        }
+      }
+    }
+  }
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

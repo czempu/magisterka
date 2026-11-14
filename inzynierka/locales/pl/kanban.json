@@ -1,0 +1,21 @@
+{
+  "title": "Tablica zadań Kanban",
+  "new_ticket": "Nowe zadanie",
+  "task_list": "Lista Zadań",
+  "settlements": "Rozliczenia",
+  "search_placeholder": "Szukaj (tytuł, opis)...",
+  "todo": "Do zrobienia",
+  "in_progress": "W trakcie",
+  "done": "Zakończone",
+  "backlog": "Backlog / Pomysły",
+  "blocked": "Zablokowane",
+  "cancelled": "Anulowane",
+  "priority": "Priorytet",
+  "priority_low": "Niski",
+  "priority_medium": "Średni",
+  "priority_high": "Wysoki",
+  "priority_urgent": "Pilny",
+  "title_placeholder": "Tytuł zadania",
+  "desc_placeholder": "Opis zadania...",
+  "empty_column": "Brak zadań w tej kolumnie"
+}

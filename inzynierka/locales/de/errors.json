@@ -1,0 +1,11 @@
+{
+  "unauthorized": "Nicht autorisiert. Bitte erneut anmelden.",
+  "forbidden": "Zugriff verweigert. Unzureichende Berechtigungen.",
+  "not_found": "Die angeforderte Ressource wurde nicht gefunden.",
+  "internal_error": "Ein interner Serverfehler ist aufgetreten.",
+  "bad_request": "Ungültige Anfrageparameter.",
+  "user_already_exists": "Ein Benutzer mit diesem Benutzernamen oder dieser E-Mail-Adresse existiert bereits.",
+  "user_not_found": "Benutzer wurde nicht gefunden.",
+  "invalid_id": "Ungültige Ressourcenkennung.",
+  "schedule_collision": "Für diesen Mitarbeiter liegt im angegebenen Zeitraum bereits ein Dienstplan vor."
+}

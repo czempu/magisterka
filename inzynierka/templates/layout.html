@@ -1,0 +1,196 @@
+{{ define "layout-start" }}
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ .Title }}</title>
+<link rel="icon" type="image/x-icon" href="/public/lib/img/favicon.png">
+  {{ template "lib" . }}
+</head>
+
+<body class="bg-gray-50 text-gray-900 antialiased"
+      x-data="{ sidebarOpen: true, modules: [] }"
+      x-init="
+        fetch('/api/me/modules')
+          .then(res => res.json())
+          .then(data => modules = data.data)
+      ">
+
+  <!-- Overlay dla mobilnego sidebaru -->
+  <div
+    class="fixed inset-0 bg-black/30 z-20 md:hidden"
+    x-show="sidebarOpen"
+    x-transition
+    @click="sidebarOpen = false"
+  ></div>
+
+  <div class="flex min-h-screen overflow-hidden">
+    {{ template "sidebar.html" . }}
+
+    <!-- Główna część -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <!-- Wspólny top bar z hamburgerem -->
+      <header class="flex items-center justify-between bg-white shadow-sm px-4 md:px-6 py-4 sticky top-0 z-10">
+        <div class="flex items-center gap-3">
+          <!-- Hamburger otwierający sidebar na mobile -->
+          <button
+            class="md:hidden p-2 rounded-lg hover:bg-gray-100"
+            @click="sidebarOpen = true"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+          <div>
+            <h1 class="text-lg md:text-xl font-semibold">
+              {{ .Title }}
+            </h1>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+
+          <!-- Language Switcher (PL / EN / DE) -->
+          <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200 text-xs font-medium">
+            <button 
+              type="button" 
+              class="px-2 py-1 rounded transition flex items-center gap-1"
+              :class="$store.i18n && $store.i18n.currentLang === 'pl' ? 'bg-white shadow text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900'"
+              @click="$store.i18n && $store.i18n.setLang('pl')"
+              title="Polski"
+            >
+              <span>🇵🇱</span> <span class="hidden sm:inline">PL</span>
+            </button>
+            <button 
+              type="button" 
+              class="px-2 py-1 rounded transition flex items-center gap-1"
+              :class="$store.i18n && $store.i18n.currentLang === 'en' ? 'bg-white shadow text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900'"
+              @click="$store.i18n && $store.i18n.setLang('en')"
+              title="English"
+            >
+              <span>🇬🇧</span> <span class="hidden sm:inline">EN</span>
+            </button>
+            <button 
+              type="button" 
+              class="px-2 py-1 rounded transition flex items-center gap-1"
+              :class="$store.i18n && $store.i18n.currentLang === 'de' ? 'bg-white shadow text-gray-900 font-semibold' : 'text-gray-500 hover:text-gray-900'"
+              @click="$store.i18n && $store.i18n.setLang('de')"
+              title="Deutsch"
+            >
+              <span>🇩🇪</span> <span class="hidden sm:inline">DE</span>
+            </button>
+          </div>
+
+          <div x-data="{ openMenu: false }">
+              
+              <div class="flex items-center gap-3 justify-end">
+                  <div class="hidden sm:block text-right leading-tight">
+                      <span class="text-xs text-gray-400 font-medium" x-text="$store.i18n ? $store.i18n.t('common.welcome', 'Witaj,') : 'Witaj,'">Witaj,</span>
+                      <div class="font-bold text-gray-800"><b>{{ .User.Name }} {{ .User.Surname}}</b> ({{.User.Username}})
+                          <br>
+                          {{if .TargetUser.ID}}
+                          <span class="text-xs text-gray-500" x-text="$store.i18n ? $store.i18n.t('common.operating_as', 'Wykonujesz operację na:') : 'Wykonujesz operację na:'">Wykonujesz operację na:</span>
+                          <b>{{ .TargetUser.Name }}</b> <b> {{ .TargetUser.Surname }}</b> 
+                          {{end}}
+                      </div>
+                  </div>
+
+                  <button 
+                      @click="openMenu = !openMenu" 
+                      class="w-10 h-10 bg-black text-white rounded-lg flex items-center justify-center font-bold shadow-md hover:bg-lime-500 transition-transform active:scale-95"
+                  >
+                      U
+                  </button>
+              </div>
+
+              <div 
+                  x-show="openMenu" 
+                  @click.outside="openMenu = false"
+                  x-transition:enter="transition ease-out duration-200"
+                  x-transition:enter-start="opacity-0 translate-y-2"
+                  x-transition:enter-end="opacity-100 translate-y-0"
+                  style="display: none; position: fixed; top: 70px; right: 20px; z-index: 9999;" 
+                  class="w-80 bg-white border border-gray-200 rounded-xl shadow-2xl flex flex-col"
+              >
+                  <div class="flex-none p-3 border-b border-gray-100 bg-gray-50 rounded-t-xl flex justify-between items-center">
+                      <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest" x-text="$store.i18n ? $store.i18n.t('nav.permissions', 'Twoje Uprawnienia') : 'Twoje Uprawnienia'">Twoje Uprawnienia</span>
+            <button @click="openMenu = false" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto max-h-[60vh] p-2 custom-scrollbar">
+            {{ range $i, $p := .Permissions }}
+                <div class="mb-1 p-2 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-100 transition group">
+                    <div class="flex flex-wrap gap-1 text-[10px] items-center">
+                        <span class="font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                            {{ $p.Description }}
+                        </span>
+                        <span class="text-gray-400 mx-0.5">•</span>
+                        <span class="font-medium text-gray-700">
+                              {{- if eq $p.Action "read" -}}Odczyt
+          {{- else if eq $p.Action "create" -}}Utworzenie
+          {{- else if eq $p.Action "update" -}}Edycja
+          {{- else if eq $p.Action "delete" -}}Usunięcie
+	  {{- else if eq $p.Action "time" -}}Odbicia
+          {{- else if eq $p.Action "*" -}}Wszystkie
+          {{- else -}}{{ $p.Action }}{{- end -}}                        </span>
+ <span class="ml-auto px-1.5 py-0.5 rounded border font-medium
+          {{- if eq $p.Scope `own` -}}bg-green-50 text-green-700 border-green-200
+          {{- else if eq $p.Scope `team` -}}bg-amber-50 text-amber-700 border-amber-200
+          {{- else if eq $p.Scope `org` -}}bg-sky-50 text-sky-700 border-sky-200
+          {{- else if eq $p.Scope `*` -}}bg-gray-50 text-gray-700 border-gray-200
+          {{- else -}}bg-gray-50 text-gray-700 border-gray-200{{- end -}}">
+          {{- if eq $p.Scope `own` -}}Własne
+          {{- else if eq $p.Scope `team` -}}Jednostka
+          {{- else if eq $p.Scope `org` -}}Organizacja
+          {{- else if eq $p.Scope `*` -}}Wszystko
+          {{- else -}}{{ $p.Scope }}{{- end -}}
+        </span>
+                    </div>
+                    {{ if $p.Condition }}
+                        <div class="mt-1 pl-2 border-l-2 border-indigo-100 text-[9px] text-gray-400 font-mono truncate">
+                            + Warunki
+                        </div>
+                    {{ end }}
+                </div>
+            {{ end }}
+        </div>
+
+        <div class="flex-none p-2 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+
+		<center><a href="/app/passwordchange" class="text-sm md:text-base text-lime-600 hover:underline">Zmień hasło</a></center>
+        </div>
+    </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+	</div>
+      </header>
+
+      <!-- Page content -->
+      <main class="flex-1 overflow-y-auto">
+        <div class="max-w-6xl mx-auto p-4 md:p-6">
+{{ end }}
+
+
+{{ define "layout-end" }}
+        </div> <!-- /max-w-6xl -->
+      </main>
+    </div> <!-- /flex-1 -->
+
+  </div> <!-- /flex layout -->
+</body>
+</html>
+{{ end }}
+

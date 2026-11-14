@@ -1,0 +1,673 @@
+{{ define "sick_leave_add.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-5xl mx-auto p-4 md:p-8 space-y-6"
+     x-data="sicknessPage({ userId: {{ .User.ID }} })"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header class="mb-4">
+    <h1 class="text-lg md:text-xl font-semibold text-black">
+      Choroby
+    </h1>
+    <p class="text-xs md:text-sm text-gray-600">
+      Rejestracja i obsługa niezdolności do pracy ze względu na chorobę.
+    </p>
+  </header>
+
+  <!-- GLOBAL FLASH -->
+  <div x-show="flash.text" x-transition
+       class="rounded-xl border px-4 py-3 text-xs md:text-sm"
+       :class="flash.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-800'">
+    <span x-text="flash.text"></span>
+  </div>
+
+  <!-- TABS -->
+  <nav class="flex border-b border-gray-200 text-sm mb-2">
+    <button
+      type="button"
+      @click="activeTab = 'mine'"
+      class="px-4 py-2 -mb-px border-b-2"
+      :class="activeTab === 'mine'
+        ? 'border-lime-600 text-lime-700 font-medium'
+        : 'border-transparent text-gray-500 hover:text-gray-700'">
+      Moje chorobowe
+    </button>
+
+{{ if or (index .PermissionsSet "sick:read:org") (index .PermissionsSet "*:*:org")  }}
+   <button
+      type="button"
+      @click="activeTab = 'admin'; ensureUsersLoaded()"
+      class="px-4 py-2 -mb-px border-b-2"
+      :class="activeTab === 'admin'
+        ? 'border-lime-600 text-lime-700 font-medium'
+        : 'border-transparent text-gray-500 hover:text-gray-700'">
+      Chorobowe pracowników
+    </button>
+{{ else }}
+
+{{ end }} 
+
+  </nav>
+
+  <!-- TAB: MOJE CHOROBOWE -->
+  <div x-show="activeTab === 'mine'" x-transition>
+    <section class="bg-white rounded-xl shadow-sm border p-4 md:p-6 space-y-3 mt-6">
+      <header class="flex items-center justify-between gap-2">
+        <div>
+          <h2 class="text-sm md:text-base font-semibold text-gray-900">Moje zgłoszenia chorobowe</h2>
+        </div>
+        <button
+          type="button"
+          @click="loadMySickness(true)"
+          class="px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] md:text-xs text-gray-700 hover:bg-gray-50">
+          ⟳ Odśwież
+        </button>
+      </header>
+
+      <div class="w-full overflow-x-auto">
+        <table class="min-w-full text-xs md:text-sm border-t border-gray-200">
+          <thead class="bg-gray-50 text-gray-700">
+            <tr>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Okres</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Numer L4</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">% płatności</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Wypadek</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-if="mySickness.length === 0">
+              <tr>
+                <td colspan="5" class="px-3 py-3 text-center text-gray-500 text-xs md:text-sm">
+                  Brak zgłoszeń chorobowych.
+                </td>
+              </tr>
+            </template>
+
+            <template x-for="s in mySickness" :key="s.id">
+              <tr class="border-b hover:bg-gray-50">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="formatRange(s)"></td>
+                <td class="px-3 py-2 whitespace-nowrap" x-text="s.certificate_number || '—'"></td>
+                <td class="px-3 py-2 whitespace-nowrap" x-text="s.percent_coverage + '%'"></td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] md:text-xs"
+                    :class="s.is_occupational_accident
+                      ? 'bg-red-50 text-red-700 border border-red-200'
+                      : 'bg-gray-50 text-gray-500 border border-gray-200'">
+                    <span x-text="s.is_occupational_accident ? 'Tak' : 'Nie'"></span>
+                  </span>
+                </td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] md:text-xs"
+                    :class="statusChipClass(s.status)">
+                    <span x-text="statusLabel(s.status)"></span>
+                  </span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB: CHOROBOWE PRACOWNIKÓW (ADMIN / HR / MENEDŻER) -->
+  <div x-show="activeTab === 'admin'" x-transition>
+
+    <section class="bg-white rounded-xl shadow-sm border p-4 md:p-6 space-y-4">
+      <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2">
+        <div>
+          <h2 class="text-sm md:text-base font-semibold text-gray-900">
+            Chorobowe pracowników
+          </h2>
+          <p class="text-[11px] md:text-xs text-gray-500">
+            Podgląd i modyfikacja zgłoszeń chorobowych innych użytkowników (status, usunięcie).
+          </p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+          <div class="min-w-[220px]">
+            <select
+              x-model.number="selectedUserId"
+              @change="loadUserSickness()"
+              class="w-full border rounded-lg px-3 py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
+            >
+              <option value="0">— wybierz pracownika —</option>
+              <template x-for="u in users" :key="u.id">
+                <option :value="u.id" x-text="userLabel(u)"></option>
+              </template>
+            </select>
+          </div>
+          <button
+            type="button"
+            @click="ensureUsersLoaded(true)"
+            class="px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] md:text-xs text-gray-700 hover:bg-gray-50">
+            ⟳ Odśwież listę użytkowników
+          </button>
+        </div>
+      </header>
+
+      <!-- Tabela zgłoszeń pracownika -->
+      <div class="w-full overflow-x-auto">
+        <table class="min-w-full text-xs md:text-sm border-t border-gray-200">
+          <thead class="bg-gray-50 text-gray-700">
+            <tr>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Pracownik</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Okres</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Numer L4</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">% płatności</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Wypadek</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Status</th>
+              <th class="px-3 py-2 text-left whitespace-nowrap">Akcje</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-if="selectedUserId && adminSickness.length === 0">
+              <tr>
+                <td colspan="7" class="px-3 py-3 text-center text-gray-500 text-xs md:text-sm">
+                  Brak zgłoszeń chorobowych dla wybranego pracownika.
+                </td>
+              </tr>
+            </template>
+
+            <template x-if="!selectedUserId">
+              <tr>
+                <td colspan="7" class="px-3 py-3 text-center text-gray-400 text-xs md:text-sm">
+                  Wybierz pracownika, aby zobaczyć zgłoszenia chorobowe.
+                </td>
+              </tr>
+            </template>
+
+            <template x-for="s in adminSickness" :key="s.id">
+              <tr class="border-b hover:bg-gray-50">
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <span x-text="currentUserLabel"></span>
+                </td>
+                <td class="px-3 py-2 whitespace-nowrap" x-text="formatRange(s)"></td>
+                <td class="px-3 py-2 whitespace-nowrap" x-text="s.certificate_number || '—'"></td>
+                <td class="px-3 py-2 whitespace-nowrap" x-text="s.percent_coverage + '%'"></td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] md:text-xs"
+                    :class="s.is_occupational_accident
+                      ? 'bg-red-50 text-red-700 border border-red-200'
+                      : 'bg-gray-50 text-gray-500 border border-gray-200'">
+                    <span x-text="s.is_occupational_accident ? 'Tak' : 'Nie'"></span>
+                  </span>
+                </td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] md:text-xs"
+                    :class="statusChipClass(s.status)">
+                    <span x-text="statusLabel(s.status)"></span>
+                  </span>
+                </td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                  <div class="flex flex-wrap gap-1">
+
+{{ if or (index .PermissionsSet "sick:update:org") (index .PermissionsSet "*:*:org")  }}
+                    <button
+                      type="button"
+                      @click="deleteSickness(s.id)"
+                      class="px-2 py-1 rounded-lg border border-red-300 text-red-700 text-[11px] md:text-xs hover:bg-red-50">
+                      Usuń
+                    </button>
+{{else}}
+Brak Uprawnień
+{{end}}
+
+                  </div>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+{{ if or (index .PermissionsSet "sick:update:org") (index .PermissionsSet "*:*:org")  }}
+ <section class="bg-white rounded-xl shadow-sm border p-4 md:p-6 space-y-4">
+      <h2 class="text-sm md:text-base font-semibold text-gray-900 mb-1">
+        Zgłoszenie chorobowe
+      </h2>
+      <p class="text-[11px] md:text-xs text-gray-500 mb-3">
+        Wprowadź okres niezdolności do pracy, podstawę prawną i dane z zaświadczenia. 
+        Po zapisaniu zostanie uruchomiony workflow akceptacji <span class="font-mono">l4</span>.
+      </p>
+
+      <!-- Daty choroby -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="from_date" class="block text-sm font-medium text-gray-700 mb-1">
+            Okres od
+          </label>
+          <input
+            id="from_date"
+            type="date"
+            x-model="form.fromDate"
+            :max="form.toDate || null"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label for="to_date" class="block text-sm font-medium text-gray-700 mb-1">
+            Okres do
+          </label>
+          <input
+            id="to_date"
+            type="date"
+            x-model="form.toDate"
+            :min="form.fromDate || null"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
+          />
+        </div>
+      </div>
+
+      <!-- Podstawa prawna -->
+      <div>
+        <label for="legal_basis" class="block text-sm font-medium text-gray-700 mb-1">
+          Podstawa prawna
+        </label>
+        <textarea
+          id="legal_basis"
+          rows="2"
+          x-model="form.legalBasis"
+          placeholder="np. Ustawa zasiłkowa, art. 6–8; choroba pracownika"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
+        ></textarea>
+        <p class="mt-1 text-[11px] text-gray-500">
+          Opis podstawy wypłaty wynagrodzenia chorobowego / zasiłku – przyda się w raportach HR.
+        </p>
+      </div>
+
+      <!-- Numer zaświadczenia -->
+      <div>
+        <label for="certificate_number" class="block text-sm font-medium text-gray-700 mb-1">
+          Numer zaświadczenia (L4 / e-ZLA)
+        </label>
+        <input
+          id="certificate_number"
+          type="text"
+          x-model="form.certificateNumber"
+          placeholder="opcjonalne"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
+        />
+      </div>
+
+      <!-- Procent pokrycia i wypadek -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="percent_coverage" class="block text-sm font-medium text-gray-700 mb-1">
+            Poziom płatności
+          </label>
+          <select
+            id="percent_coverage"
+            x-model="form.percentCoverage"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
+          >
+            <option value="auto">Automatycznie z przepisów (domyślnie 80%, 100% przy wypadku)</option>
+            <option value="80">80% wynagrodzenia</option>
+            <option value="100">100% wynagrodzenia</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2 mt-2 md:mt-7">
+          <input
+            id="is_accident"
+            type="checkbox"
+            x-model="form.isAccident"
+            class="h-4 w-4 text-lime-600 border-gray-300 rounded"
+          />
+          <label for="is_accident" class="text-sm text-gray-700">
+            Wypadek przy pracy / w drodze do pracy
+          </label>
+        </div>
+      </div>
+
+      <!-- Akcje -->
+      <div class="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
+        <button
+          type="button"
+          @click="resetForm()"
+          :disabled="loading"
+          class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 w-full sm:w-auto"
+        >
+          Wyczyść
+        </button>
+        <button
+          type="button"
+          @click="submitMine()"
+          :disabled="!canSubmit || loading"
+          class="px-4 py-2 rounded-lg bg-black text-white text-sm font-medium hover:bg-lime-700 disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
+        >
+          <span x-show="!loading">Zgłoś chorobę</span>
+          <span x-show="loading">Wysyłanie…</span>
+        </button>
+      </div>
+    </section>
+	{{else}}
+	{{end}}
+
+  </div>
+{{ if index .PermissionsSet "*:*:org"  }}
+  <section class="bg-white rounded-xl shadow-sm border p-4 mt-6">
+    <details class="text-sm">
+      <summary class="cursor-pointer text-gray-700">Podgląd payloadu (dev)</summary>
+      <pre class="mt-2 bg-gray-50 p-3 rounded-lg text-xs overflow-auto"
+           x-text="JSON.stringify(buildPayload(), null, 2)"></pre>
+    </details>
+  </section>
+</div>
+
+{{ else }}
+
+{{ end }} 
+ 
+<script>
+  function sicknessPage({ userId }) {
+    return {
+      userId,
+      activeTab: 'mine',
+
+      loading: false,
+      flash: { text: '', ok: true },
+
+      // FORM (dla zalogowanego lub admina)
+      form: {
+        fromDate: '',
+        toDate: '',
+        legalBasis: '',
+        certificateNumber: '',
+        percentCoverage: 'auto', // 'auto' | '80' | '100'
+        isAccident: false,
+      },
+
+      // LISTY
+      mySickness: [],
+      adminSickness: [],
+      users: [],
+      selectedUserId: 0,
+      currentUserLabel: '',
+      usersLoaded: false,
+
+      async init() {
+        if (this.userId) {
+          await this.loadMySickness(false);
+        }
+      },
+
+      // --- UTIL ---
+      setFlash(text, ok = true) {
+        this.flash = { text, ok };
+        if (text) {
+          setTimeout(() => { this.flash.text = ''; }, 5000);
+        }
+      },
+
+      get canSubmit() {
+        return !!(this.form.fromDate && this.form.toDate && this.form.legalBasis);
+      },
+
+      buildPayload() {
+        const payload = {
+          from_date: this.form.fromDate,
+          to_date: this.form.toDate,
+          legal_basis: (this.form.legalBasis || '').trim(),
+          certificate_number: (this.form.certificateNumber || '').trim(),
+          percent_coverage: 0,
+          is_occupational_accident: this.form.isAccident,
+        };
+
+        if (this.form.percentCoverage !== 'auto') {
+          payload.percent_coverage = Number(this.form.percentCoverage) || 0;
+        }
+
+        return payload;
+      },
+
+      resetForm() {
+        this.form = {
+          fromDate: '',
+          toDate: '',
+          legalBasis: '',
+          certificateNumber: '',
+          percentCoverage: 'auto',
+          isAccident: false,
+        };
+      },
+
+      formatRange(s) {
+        if (!s.from_date && !s.to_date) return '—';
+        if (s.from_date === s.to_date) return s.from_date;
+        return `${s.from_date} – ${s.to_date}`;
+      },
+
+      statusLabel(status) {
+        switch (status) {
+          case 'approved': return 'zatwierdzone';
+          case 'rejected': return 'odrzucone';
+          case 'cancelled': return 'anulowane';
+          case 'pending':
+          default: return 'oczekujące';
+        }
+      },
+
+      statusChipClass(status) {
+        switch (status) {
+          case 'approved':
+            return 'bg-green-50 text-green-700 border border-green-200';
+          case 'rejected':
+            return 'bg-red-50 text-red-700 border border-red-200';
+          case 'cancelled':
+            return 'bg-gray-50 text-gray-500 border border-gray-200';
+          case 'pending':
+          default:
+            return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
+        }
+      },
+
+      userLabel(u) {
+        const name = (u.Name || '').trim();
+        const surname = (u.Surname || '').trim();
+        const username = (u.username || '').trim();
+        let base = [name, surname].filter(Boolean).join(' ');
+        if (!base && username) base = username;
+        if (base && username && base !== username) {
+          return `${base} (${username})`;
+        }
+        return base || `Użytkownik #${u.id}`;
+      },
+
+      // --- SUBMIT: zmieniony endpoint ---
+      // POST /api/sickness/user/:id
+      // - w zakładce "mine" id = zalogowany userId
+      // - w zakładce "admin" id = selectedUserId (jeśli wybrany)
+      async submitMine() {
+        if (!this.canSubmit) return;
+
+        // jeśli jesteśmy w admin tab i wybrano usera -> zapisuj dla tego usera
+        const targetId = (this.activeTab === 'admin' && this.selectedUserId)
+          ? Number(this.selectedUserId)
+          : Number(this.userId);
+
+        if (!targetId) {
+          this.setFlash('Wybierz pracownika, aby dodać chorobowe.', false);
+          return;
+        }
+
+        this.loading = true;
+        this.setFlash('', true);
+
+        try {
+          const res = await fetch(`/api/sickness/user/${encodeURIComponent(targetId)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify(this.buildPayload()),
+          });
+
+          // zawsze próbuj odczytać json
+          let data = null;
+          try { data = await res.json(); } catch (_) { data = null; }
+
+          // obsłuż {error:"..."} nawet przy 200
+          if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+            throw new Error(data.error);
+          }
+
+          if (!res.ok) {
+            const msg = (data && (data.error || data.message)) ? (data.error || data.message) : 'Wystąpił błąd podczas wysyłki.';
+            throw new Error(msg);
+          }
+
+          const txt = (data && (data.data || data.message || data.status)) || 'Zgłoszenie chorobowe zostało zapisane.';
+          this.setFlash(txt, true);
+
+          // AUTO-ODŚWIEŻANIE:
+          // - jeśli admin tab: odśwież listę chorobowych dla wybranego użytkownika (bez zmiany selekcji)
+          // - jeśli mine tab: odśwież "moje"
+          if (this.activeTab === 'admin') {
+            await this.loadUserSickness();
+          } else {
+            await this.loadMySickness(false);
+          }
+
+          this.resetForm();
+        } catch (e) {
+          this.setFlash(e?.message || 'Nieznany błąd.', false);
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async loadMySickness(showFlashOnError) {
+        if (!this.userId) return;
+        try {
+          const res = await fetch(`/api/sickness?employee_id=${this.userId}`, {
+            headers: { 'Accept': 'application/json' },
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          this.mySickness = Array.isArray(data.data) ? data.data : (data.data || []);
+        } catch (e) {
+          if (showFlashOnError) {
+            this.setFlash('Nie udało się pobrać Twoich zgłoszeń chorobowych.', false);
+          }
+        }
+      },
+
+      // --- ADMIN / HR ---
+      async ensureUsersLoaded(force = false) {
+        if (this.usersLoaded && !force) return;
+        try {
+          const res = await fetch('/api/users', { headers: { 'Accept': 'application/json' } });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          this.users = Array.isArray(data.data) ? data.data : (data.data || []);
+          this.usersLoaded = true;
+
+          // jeśli admin tab i jest wybrany user — odśwież etykietę (nie ruszaj selectedUserId)
+          if (this.selectedUserId) {
+            const u = this.users.find(u => u.id === this.selectedUserId);
+            this.currentUserLabel = u ? this.userLabel(u) : this.currentUserLabel;
+          }
+        } catch (e) {
+          this.setFlash('Nie udało się pobrać listy użytkowników.', false);
+        }
+      },
+
+      async loadUserSickness() {
+        this.adminSickness = [];
+        this.currentUserLabel = '';
+
+        if (!this.selectedUserId) return;
+
+        const u = this.users.find(u => u.id === this.selectedUserId);
+        if (u) this.currentUserLabel = this.userLabel(u);
+
+        try {
+          const res = await fetch(`/api/sickness?employee_id=${this.selectedUserId}`, {
+            headers: { 'Accept': 'application/json' },
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          this.adminSickness = Array.isArray(data.data) ? data.data : (data.data || []);
+        } catch (e) {
+          this.setFlash('Nie udało się pobrać zgłoszeń chorobowych pracownika.', false);
+        }
+      },
+
+      async deleteSickness(id) {
+        if (!id) return;
+        if (!confirm('Na pewno usunąć to zgłoszenie chorobowe?')) return;
+
+        try {
+          const res = await fetch(`/api/sickness/${id}`, {
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json' },
+          });
+
+          let data = null;
+          try { data = await res.json(); } catch (_) { data = null; }
+
+          // obsłuż {error:"..."} także przy 200
+          if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+            throw new Error(data.error);
+          }
+
+          if (!res.ok) {
+            throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : 'Błąd podczas usuwania');
+          }
+
+          const msg = (data && (data.message || data.data)) ? (data.message || data.data) : 'Zgłoszenie chorobowe zostało usunięte.';
+          this.setFlash(msg, true);
+
+          // AUTO-ODŚWIEŻANIE w zakładce admin: pozostajemy na wybranym użytkowniku
+          await this.loadUserSickness();
+        } catch (e) {
+          this.setFlash(e?.message || 'Nie udało się usunąć zgłoszenia.', false);
+        }
+      },
+
+      async changeStatus(id, status) {
+        if (!id || !status) return;
+
+        try {
+          const res = await fetch(`/api/sickness/${id}/status`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({ status }),
+          });
+
+          let data = null;
+          try { data = await res.json(); } catch (_) { data = null; }
+
+          if (data && typeof data === 'object' && typeof data.error === 'string' && data.error.trim() !== '') {
+            throw new Error(data.error);
+          }
+
+          if (!res.ok) {
+            throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : 'Błąd podczas zmiany statusu');
+          }
+
+          this.setFlash('Zmieniono status chorobowego na: ' + this.statusLabel(status), true);
+          await this.loadUserSickness();
+        } catch (e) {
+          this.setFlash(e?.message || 'Nie udało się zmienić statusu.', false);
+        }
+      },
+    }
+  }
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

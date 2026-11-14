@@ -1,0 +1,340 @@
+{{ define "workflow_admin.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-6xl mx-auto p-4 md:p-6"
+     x-data="workflowAdmin()"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header class="mb-6">
+    <h1 class="text-lg md:text-xl font-semibold">
+      Obiegi Akceptacji
+    </h1>
+    <p class="text-xs md:text-sm text-gray-600 mt-0.5">
+      Konfiguracja kroków akceptacji.
+    </p>
+  </header>
+
+  <!-- LISTA WORKFLOW -->
+  <section class="space-y-4">
+
+    <template x-for="wf in workflows" :key="wf.id">
+      <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+
+        <!-- WORKFLOW HEADER -->
+        <div class="flex items-center justify-between p-4 md:p-5">
+          <div>
+            <div class="font-medium text-sm md:text-base" x-text="wf.name"></div>
+            <div class="text-xs text-gray-500" x-text="wf.resource"></div>
+          </div>
+
+          <button
+            class="text-lime-500 text-xs md:text-sm font-medium"
+            @click="toggleWorkflow(wf)">
+            <span x-show="!wf.open">
+
+{{ if or (index .PermissionsSet "workflow:update:org") (index .PermissionsSet "*:*:org")  }}
+
+		    Edytuj kroki
+		    {{else}}
+
+		    Podgląd
+
+		    {{end}}
+
+	    </span>
+            <span x-show="wf.open">Zamknij</span>
+          </button>
+        </div>
+
+        <!-- STEPS -->
+        <div x-show="wf.open" x-transition
+             class="border-t border-gray-100 p-4 md:p-5 space-y-4">
+
+          <template x-for="step in wf.steps" :key="step.step_no">
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 md:p-4 space-y-3">
+
+              <!-- ROW -->
+              <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+
+                <!-- STEP NO -->
+                <div>
+                  <label class="block text-xs text-gray-500 mb-0.5">Krok</label>
+
+                  <!-- DODANE: wrapper z przyciskiem usuń (bez usuwania czegokolwiek innego) -->
+                  <div class="flex items-center gap-2">
+                    <input type="number" min="1"
+                           class="w-full border rounded-lg px-2 py-1.5 text-sm"
+                           x-model.number="step.step_no">
+
+{{ if or (index .PermissionsSet "workflow:update:org") (index .PermissionsSet "*:*:org")  }}
+                    <button type="button"
+                            class="px-2 py-1.5 rounded-lg border border-red-200 text-red-700 text-xs hover:bg-red-50"
+                            title="Usuń krok"
+                            @click="removeStep(wf, step)">
+                      Usuń
+                    </button>
+{{ end }}
+                  </div>
+                </div>
+
+                <!-- APPROVER TYPE -->
+                <div class="md:col-span-2">
+                  <label class="block text-xs text-gray-500 mb-0.5">
+                    Typ akceptującego
+                  </label>
+                  <select class="w-full border rounded-lg px-2 py-1.5 text-sm"
+                          x-model="step.approver_type"
+                          @change="onApproverChange(step)">
+                    <option value="manager_of_requester">Przełożony wnioskującego</option>
+                    <option value="role_global">Rola systemowa</option>
+                    <option value="manager_of_unit">Kierownik działu</option>
+                    <option value="user_of_unit">Użytkownik z działu</option>
+                    <option value="specific_user">Konkretny użytkownik</option>
+                  </select>
+                </div>
+
+                    <!-- CURRENT ASSIGNMENT -->
+              <div x-show="step.resolvedLabel">
+                <label class="block text-xs text-gray-500">
+                  Aktualnie przypisany
+                </label>
+                <div class="text-sm font-medium"
+                     x-text="step.resolvedLabel"></div>
+              </div>
+
+              <!-- CHANGE ASSIGNMENT -->
+              <div x-show="step.showSlug">
+                <label class="block text-xs text-gray-500 mb-0.5">
+                  Zmień przypisanie
+                </label>
+
+                <!-- ROLE -->
+                <select x-show="step.approver_type === 'role_global'"
+                        class="w-full border rounded-lg px-2 py-1.5 text-sm"
+                        x-model="step.slug"
+                        @change="resolveStepLabel(step)">
+                  <option value="">— wybierz rolę —</option>
+                  <template x-for="r in roles" :key="r.id">
+                    <option :value="String(r.id)" x-text="r.name"></option>
+                  </template>
+                </select>
+
+                <!-- ORG -->
+                <select x-show="step.approver_type === 'manager_of_unit' || step.approver_type === 'user_of_unit'"
+                        class="w-full border rounded-lg px-2 py-1.5 text-sm"
+                        x-model="step.slug"
+                        @change="resolveStepLabel(step)">
+                  <option value="">— wybierz dział —</option>
+                  <template x-for="o in orgUnits" :key="o.id">
+                    <option :value="String(o.id)" x-text="o.name"></option>
+                  </template>
+                </select>
+
+                <!-- USER -->
+                <select x-show="step.approver_type === 'specific_user'"
+                        class="w-full border rounded-lg px-2 py-1.5 text-sm"
+                        x-model="step.slug"
+                        @change="resolveStepLabel(step)">
+                  <option value="">— wybierz użytkownika —</option>
+                  <template x-for="u in users" :key="u.id">
+                    <option :value="String(u.id)"
+                            x-text="u.username + ' (' + u.Name + ' ' + u.Surname + ')'">
+                    </option>
+                  </template>
+                </select>
+              </div>
+
+            </div>
+          </template>
+
+          <!-- ACTIONS -->
+          <div class="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100">
+
+{{ if or (index .PermissionsSet "workflow:update:org") (index .PermissionsSet "*:*:org")  }}
+            <button
+              class="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-xs md:text-sm hover:bg-gray-50"
+              @click="addStep(wf)">
+              + Dodaj krok
+            </button>
+
+            <button
+              class="px-5 py-2 rounded-xl bg-black text-white text-xs md:text-sm hover:bg-lime-500"
+              @click="saveWorkflow(wf)">
+              Zapisz zmiany
+            </button>
+
+	    {{else}}
+	    	Brak uprawnień do edycji
+	    {{end}}
+
+	  </div>
+        </div>
+      </div>
+    </template>
+
+  </section>
+</div>
+
+<script>
+function workflowAdmin() {
+  return {
+    workflows: [],
+    roles: [],
+    orgUnits: [],
+    users: [],
+
+    async init() {
+      await Promise.all([
+        this.loadRoles(),
+        this.loadOrgUnits(),
+        this.loadUsers()
+      ])
+      await this.loadWorkflows()
+    },
+
+    async loadWorkflows() {
+      const r = await fetch('/api/workflow')
+      const j = await r.json()
+      this.workflows = (j.data || []).map(w => ({
+        ...w,
+        open: false,
+        steps: []
+      }))
+    },
+
+    async loadRoles() {
+      const r = await fetch('/api/roles')
+      const j = await r.json()
+      this.roles = Array.isArray(j) ? j : (j.data || [])
+    },
+
+    async loadOrgUnits() {
+      const r = await fetch('/api/org')
+      const j = await r.json()
+      this.orgUnits = j.data || []
+    },
+
+    async loadUsers() {
+      const r = await fetch('/api/users')
+      const j = await r.json()
+      this.users = j.data || []
+    },
+
+    async toggleWorkflow(wf) {
+      wf.open = !wf.open
+      if (!wf.open || wf.steps.length) return
+
+      const r = await fetch('/api/workflow/id/' + wf.id)
+      const j = await r.json()
+
+      wf.steps = (j.data.steps || []).map(s => ({
+        ...s,
+        slug: s.role_slug !== null ? String(s.role_slug) : '',
+        resolvedLabel: '',
+        showSlug: false
+      }))
+
+      wf.steps.forEach(s => {
+        this.onApproverChange(s)
+        this.resolveStepLabel(s)
+      })
+    },
+
+    onApproverChange(step) {
+      step.showSlug = [
+        'role_global',
+        'manager_of_unit',
+        'user_of_unit',
+        'specific_user'
+      ].includes(step.approver_type)
+
+      if (!step.showSlug) {
+        step.slug = ''
+        step.resolvedLabel = ''
+      }
+    },
+
+    resolveStepLabel(step) {
+      if (!step.slug) {
+        step.resolvedLabel = ''
+        return
+      }
+
+      const id = String(step.slug)
+
+      if (step.approver_type === 'role_global') {
+        const r = this.roles.find(x => String(x.id) === id)
+        step.resolvedLabel = r ? r.name : '(nieznana rola)'
+      }
+
+      if (step.approver_type === 'manager_of_unit' ||
+          step.approver_type === 'user_of_unit') {
+        const o = this.orgUnits.find(x => String(x.id) === id)
+        step.resolvedLabel = o ? o.name : '(nieznany dział)'
+      }
+
+      if (step.approver_type === 'specific_user') {
+        const u = this.users.find(x => String(x.id) === id)
+        step.resolvedLabel = u
+          ? `${u.username} (${u.Name} ${u.Surname})`
+          : '(nieznany użytkownik)'
+      }
+    },
+
+    addStep(wf) {
+      wf.steps.push({
+        workflow_id: wf.id,
+        step_no: wf.steps.length + 1,
+        completion_rule: 'all',
+        approver_type: 'manager_of_requester',
+        slug: '',
+        resolvedLabel: '',
+        levels_up: 0,
+        org_scope: 'requester_unit',
+        required: true,
+        showSlug: false
+      })
+    },
+
+    // DODANE: możliwość usuwania kroku (bez usuwania niczego innego)
+    removeStep(wf, step) {
+      if (!wf || !Array.isArray(wf.steps)) return
+      if (!step) return
+
+      const ok = confirm(`Usunąć krok #${step.step_no}?`)
+      if (!ok) return
+
+      wf.steps = wf.steps.filter(s => s !== step)
+
+      // Renumeracja kroków po usunięciu (żeby API i UI miały spójną kolejność)
+      wf.steps
+        .sort((a, b) => (Number(a.step_no) || 0) - (Number(b.step_no) || 0))
+        .forEach((s, idx) => { s.step_no = idx + 1 })
+    },
+
+    async saveWorkflow(wf) {
+      await fetch(`/api/workflow/${wf.id}/steps`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          steps: wf.steps.map(s => ({
+            workflow_id: wf.id,
+            step_no: s.step_no,
+            completion_rule: s.completion_rule,
+            approver_type: s.approver_type,
+            role_slug: s.slug || null,
+            levels_up: s.levels_up,
+            org_scope: s.org_scope,
+            required: s.required
+          }))
+        })
+      })
+    }
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

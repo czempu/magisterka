@@ -1,0 +1,747 @@
+{{ define "permissions.html" }}
+{{ template "layout-start" . }}
+
+<style>
+  [x-cloak] { display: none !important; }
+</style>
+
+<div class="max-w-7xl mx-auto p-4 md:p-8 space-y-6"
+     x-data="permissionsPage()"
+     x-init="init()"
+     x-cloak>
+
+  <!-- HEADER -->
+
+  <!-- GLOBAL FLASH -->
+  <div x-show="flash.text" x-transition
+       class="rounded-xl border px-4 py-3 text-xs md:text-sm"
+       :class="flash.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-800'">
+    <span x-text="flash.text"></span>
+  </div>
+
+  <!-- GRID -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+    <!-- ==================== -->
+    <!-- KARTA: ROLE          -->
+    <!-- ==================== -->
+    <section class="bg-white border border-gray-200 rounded-2xl shadow-sm flex flex-col overflow-hidden">
+
+      <div class="p-5 flex justify-between items-center border-b">
+        <div>
+          <h2 class="text-base md:text-lg font-semibold text-gray-900">Role</h2>
+        </div>
+{{ if or (index .PermissionsSet "permissions:update:org") (index .PermissionsSet "*:*:org")  }}
+  
+        <button type="button"
+                @click="openRoleModal(null)"
+                class="px-3 py-1.5 rounded-lg bg-black text-white text-xs md:text-sm hover:bg-lime-700">
+          + Dodaj rolę
+        </button>
+      {{else}}
+      {{end}}
+      </div>
+
+      <div class="p-4 border-b bg-gray-50">
+        <div class="relative">
+          <div class="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </div>
+          <input type="text"
+                 x-model="roleSearch"
+                 placeholder="Szukaj roli: slug / nazwa / ID"
+                 class="w-full border rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500">
+        </div>
+      </div>
+
+      <div class="overflow-auto max-h-[600px]">
+        <table class="min-w-full text-xs md:text-sm">
+          <thead class="bg-gray-50 border-b text-gray-600 sticky top-0">
+            <tr>
+              <th class="p-3 text-left w-14">ID</th>
+              <th class="p-3 text-left">Kod</th>
+              <th class="p-3 text-left">Nazwa</th>
+              <th class="p-3 text-center w-28">Akcje</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <template x-if="filteredRoles.length === 0">
+              <tr>
+                <td colspan="4" class="p-4 text-center text-gray-500">
+                  Brak ról do wyświetlenia.
+                </td>
+              </tr>
+            </template>
+
+            <template x-for="r in filteredRoles" :key="r.id">
+              <tr class="border-b hover:bg-gray-50">
+                <td class="p-3" x-text="r.id"></td>
+                <td class="p-3 font-mono" x-text="r.slug"></td>
+                <td class="p-3" x-text="r.name"></td>
+
+                <td class="p-3 text-center space-x-2">
+
+{{ if or (index .PermissionsSet "permissions:update:org") (index .PermissionsSet "*:*:org")  }}
+  
+                  <button type="button"
+                          @click="openRoleModal(r)"
+                          class="text-[11px] px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                    Edytuj
+                  </button>
+
+                  <button type="button"
+                          @click="deleteRole(r.id)"
+                          class="text-[11px] px-2 py-1 bg-red-100 text-red-800 rounded">
+                    Usuń
+                  </button>
+               	{{else}} 
+		  {{end}}
+
+		</td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="p-4 border-t bg-gray-50 flex items-center justify-between">
+        <span class="text-[11px] md:text-xs text-gray-600"
+              x-text="roles.length + ' ról'"></span>
+        <button type="button"
+                @click="loadRoles(true)"
+                class="px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] md:text-xs text-gray-700 hover:bg-gray-100">
+          ⟳ Odśwież
+        </button>
+      </div>
+    </section>
+
+    <!-- ==================== -->
+    <!-- KARTA: PERMISSIONS   -->
+    <!-- ==================== -->
+    <section class="bg-white border border-gray-200 rounded-2xl shadow-sm flex flex-col overflow-hidden">
+
+      <div class="p-5 flex justify-between items-center border-b">
+        <div>
+          <h2 class="text-base md:text-lg font-semibold text-gray-900">Uprawnienia</h2>
+          <p class="text-[11px] md:text-xs text-gray-500">Katalog uprawnień (podgląd).</p>
+        </div>
+
+        <button type="button"
+                @click="loadPermissions(true)"
+                class="px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] md:text-xs text-gray-700 hover:bg-gray-50">
+          ⟳ Odśwież
+        </button>
+      </div>
+
+      <div class="p-4 border-b bg-gray-50">
+        <div class="relative">
+          <div class="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </div>
+          <input type="text"
+                 x-model="permSearch"
+                 placeholder="Szukaj: zasób / operacja / zakres / ID"
+                 class="w-full border rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500">
+        </div>
+      </div>
+
+      <div class="overflow-auto max-h-[600px]">
+        <table class="min-w-full text-xs md:text-sm">
+          <thead class="bg-gray-50 border-b text-gray-600 sticky top-0">
+            <tr>
+              <th class="p-3 text-left w-14">ID</th>
+              <th class="p-3 text-left">Zasób</th>
+              <th class="p-3 text-left">Operacja</th>
+              <th class="p-3 text-left w-32">Zakres</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <template x-if="filteredPermissions.length === 0">
+              <tr>
+                <td colspan="4" class="p-4 text-center text-gray-500">
+                  Brak uprawnień do wyświetlenia.
+                </td>
+              </tr>
+            </template>
+
+            <template x-for="p in filteredPermissions" :key="p.id">
+              <tr class="border-b hover:bg-gray-50">
+                <td class="p-3" x-text="p.id"></td>
+                <!-- ZMIANA: zamiast resource pokazujemy Description -->
+                <td class="p-3 truncate" x-text="permLabel(p)"></td>
+                <td class="p-3" x-text="actionPL(p.action)"></td>
+                <td class="p-3" x-text="scopePL(p.scope)"></td>
+              </tr>
+            </template>
+          </tbody>
+
+        </table>
+      </div>
+
+      <div class="p-4 border-t bg-gray-50">
+        <span class="text-[11px] md:text-xs text-gray-600"
+              x-text="permissions.length + ' uprawnień'"></span>
+      </div>
+    </section>
+
+
+
+
+
+    <!-- ===================================== -->
+    <!-- KARTA: PRZYPISANIA PERMISSIONS → ROLE -->
+    <!-- ===================================== -->
+    <section class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 overflow-hidden"
+             x-data="rolePermissionsManager()"
+             x-init="init()">
+
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 class="text-base md:text-lg font-semibold text-gray-900">Przypisania uprawnień</h2>
+          <p class="text-[11px] md:text-xs text-gray-500">
+            Dodawaj i usuwaj uprawnienia dla wybranej roli.
+          </p>
+        </div>
+        <button type="button"
+                @click="init(true)"
+                class="px-3 py-1.5 rounded-lg border border-gray-300 text-[11px] md:text-xs text-gray-700 hover:bg-gray-50">
+          ⟳ Odśwież
+        </button>
+      </div>
+
+      <label class="text-xs md:text-sm font-medium text-gray-700 mb-1">Wybierz rolę</label>
+      <select x-model="roleId"
+              @change="loadAssignments()"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 mb-3 bg-white text-xs md:text-sm">
+        <option value="">-- wybierz --</option>
+        <template x-for="r in roles" :key="r.id">
+          <option :value="r.id" x-text="r.name + ' (' + r.slug + ')'"></option>
+        </template>
+      </select>
+
+      <template x-if="roleId">
+        <div class="space-y-5">
+
+          <!-- ASSIGNED -->
+          <div>
+            <h3 class="font-semibold text-xs md:text-sm text-gray-700 mb-2">Przypisane uprawnienia</h3>
+
+            <template x-if="assigned.length === 0">
+              <p class="text-gray-500 text-xs md:text-sm">Brak przypisanych uprawnień.</p>
+            </template>
+
+            <div class="space-y-2 max-h-56 overflow-auto pr-1">
+              <template x-for="p in assigned" :key="p.id">
+                <div class="flex justify-between items-center p-2 border rounded-lg bg-gray-50">
+                  <span class="text-xs md:text-sm">
+                    <!-- ZMIANA: zamiast resource pokazujemy Description -->
+                    <strong x-text="permLabel(p)"></strong>
+                    /
+                    <span x-text="actionPL(p.action)"></span>
+                    <span class="ml-1 text-[11px] text-gray-500">[<span x-text="scopePL(p.scope)"></span>]</span>
+                  </span>
+
+
+
+{{ if or (index .PermissionsSet "permissions:update:org") (index .PermissionsSet "*:*:org")  }}
+                  <button type="button"
+                          @click="remove(p.id)"
+                          class="px-2 py-1 text-[11px] bg-red-100 text-red-700 rounded">
+                    Usuń
+                  </button>
+		  {{else}}
+		  {{end}}
+
+
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- AVAILABLE -->
+          <div>
+            <h3 class="font-semibold text-xs md:text-sm text-gray-700 mb-2">Dostępne do dodania</h3>
+
+            <div class="relative mb-2">
+              <div class="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-4.35-4.35m1.1-5.15a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+              </div>
+              <input type="text"
+                     x-model="availableSearch"
+                     placeholder="Szukaj uprawnienia..."
+                     class="w-full border rounded-lg pl-9 pr-3 py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500">
+            </div>
+
+            <div class="space-y-2 max-h-56 overflow-auto pr-1">
+              <template x-for="p in filteredAvailable" :key="p.id">
+                <div class="flex justify-between items-center p-2 border rounded-lg">
+                  <span class="text-xs md:text-sm">
+                    <!-- ZMIANA: zamiast resource pokazujemy Description -->
+                    <strong x-text="permLabel(p)"></strong>
+                    /
+                    <span x-text="actionPL(p.action)"></span>
+                    <span class="ml-1 text-[11px] text-gray-500">[<span x-text="scopePL(p.scope)"></span>]</span>
+                  </span>
+
+{{ if or (index .PermissionsSet "permissions:update:org") (index .PermissionsSet "*:*:org")  }}
+                  <button type="button"
+                          @click="assign(p.id)"
+                          class="px-2 py-1 text-[11px] bg-green-100 text-green-700 rounded">
+                    Dodaj
+                  </button>
+		  {{else}}
+
+		  {{end}}
+                </div>
+              </template>
+            </div>
+          </div>
+
+        </div>
+      </template>
+
+      <template x-if="!roleId">
+        <div class="mt-3 text-xs md:text-sm text-gray-500">
+          Wybierz rolę, aby zarządzać przypisaniami uprawnień.
+        </div>
+      </template>
+
+    </section>
+
+
+
+
+
+  </div>
+
+  <!-- ROLE MODAL -->
+  <div x-show="showRoleModal" x-transition
+       @keydown.escape.window="closeRoleModal()"
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+       style="display: none;">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-gray-200 overflow-hidden"
+         @click.outside="closeRoleModal()">
+      <div class="px-5 py-4 border-b flex items-center justify-between">
+        <h3 class="font-semibold text-gray-900"
+            x-text="roleForm.id ? ('Edycja roli #' + roleForm.id) : 'Nowa rola'"></h3>
+        <button type="button" @click="closeRoleModal()" class="text-gray-500 hover:text-gray-700">✕</button>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Kod</label>
+          <input type="text" x-model="roleForm.slug"
+                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
+                 placeholder="np. hr_admin" required>
+        </div>
+
+        <div>
+          <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Nazwa</label>
+          <input type="text" x-model="roleForm.name"
+                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
+                 placeholder="np. HR Administrator" required>
+        </div>
+
+        <template x-if="roleError">
+          <div class="text-xs md:text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+               x-text="roleError"></div>
+        </template>
+      </div>
+
+      <div class="px-5 py-4 border-t bg-gray-50 flex items-center justify-end gap-2">
+        <button type="button"
+                @click="closeRoleModal()"
+                class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-white">
+          Anuluj
+        </button>
+
+        <button type="button"
+                @click="saveRole()"
+                :disabled="roleSaving"
+                class="px-4 py-2 rounded-lg bg-black text-white text-sm hover:bg-lime-700 disabled:opacity-50">
+          <span x-show="!roleSaving">Zapisz</span>
+          <span x-show="roleSaving">Zapisywanie…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function actionPL(v) {
+  const s = String(v ?? '').trim().toLowerCase();
+  if (s === 'read' || s === 'get' || s === 'list') return 'Odczyt';
+  if (s === 'create' || s === 'post' || s === 'add') return 'Utworzenie';
+  if (s === 'update' || s === 'put' || s === 'patch') return 'Edycja';
+  if (s === 'delete' || s === 'del' || s === 'remove') return 'Usunięcie';
+  if (s === 'time') return 'Czas';
+  return v ?? '—';
+}
+
+function scopePL(v) {
+  const s = String(v ?? '').trim().toLowerCase();
+  if (s === 'own') return 'Własne';
+  if (s === 'team') return 'Jednostka';
+  if (s === 'org') return 'Organizacja';
+  if (s === '*') return 'Wszystko';
+  return v ?? '—';
+}
+
+/* ZMIANA: label zasobu = Description z API (fallback na description/resource) */
+function permLabel(p) {
+  const d = (p && (p.Description ?? p.description)) ?? '';
+  const r = (p && p.resource) ?? '';
+  const ds = String(d).trim();
+  const rs = String(r).trim();
+  return ds || rs || '—';
+}
+
+function permissionsPage() {
+  const jsonOrThrow = async (res) => {
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('application/json')) {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = (typeof body === 'string' ? body : (body.error || body.message || JSON.stringify(body)));
+        throw new Error(msg || ('HTTP ' + res.status));
+      }
+      return body;
+    } else {
+      const text = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(text || ('HTTP ' + res.status));
+      return text;
+    }
+  };
+
+  const safeArr = (x) => Array.isArray(x) ? x : (x?.data && Array.isArray(x.data) ? x.data : []);
+
+  return {
+    roles: [],
+    permissions: [],
+    flash: { ok: true, text: '' },
+
+    roleSearch: '',
+    permSearch: '',
+
+    showRoleModal: false,
+    roleSaving: false,
+    roleError: '',
+    roleForm: { id: null, slug: '', name: '' },
+
+    actionPL,
+    scopePL,
+    permLabel,
+
+    async init() {
+      await Promise.all([this.loadRoles(false), this.loadPermissions(false)]);
+    },
+
+    setFlash(text, ok = true) {
+      this.flash = { ok, text };
+      if (text) setTimeout(() => { this.flash.text = ''; }, 5000);
+    },
+
+    async loadRoles(showFlash) {
+      try {
+        const res = await fetch('/api/roles', { headers: { 'Accept': 'application/json' }});
+        const data = await jsonOrThrow(res);
+        this.roles = safeArr(data);
+        if (showFlash) this.setFlash('✅ Odświeżono role', true);
+      } catch (e) {
+        if (showFlash) this.setFlash('Nie udało się pobrać ról: ' + (e?.message || ''), false);
+      }
+    },
+
+    async loadPermissions(showFlash) {
+      try {
+        const res = await fetch('/api/permissions', { headers: { 'Accept': 'application/json' }});
+        const data = await jsonOrThrow(res);
+        this.permissions = safeArr(data);
+        if (showFlash) this.setFlash('✅ Odświeżono uprawnienia', true);
+      } catch (e) {
+        if (showFlash) this.setFlash('Nie udało się pobrać uprawnień: ' + (e?.message || ''), false);
+      }
+    },
+
+    get filteredRoles() {
+      const q = (this.roleSearch || '').trim().toLowerCase();
+      if (!q) return this.roles;
+
+      const q2 = q.startsWith('#') ? q.slice(1) : q;
+      return this.roles.filter(r => {
+        const id = String(r.id ?? '');
+        const slug = String(r.slug ?? '').toLowerCase();
+        const name = String(r.name ?? '').toLowerCase();
+        return id.includes(q2) || slug.includes(q) || name.includes(q);
+      });
+    },
+
+    get filteredPermissions() {
+      const q = (this.permSearch || '').trim().toLowerCase();
+      if (!q) return this.permissions;
+
+      const q2 = q.startsWith('#') ? q.slice(1) : q;
+      return this.permissions.filter(p => {
+        const id = String(p.id ?? '');
+        const resource = String(p.resource ?? '').toLowerCase();
+        const desc = String((p.Description ?? p.description) ?? '').toLowerCase();
+        const action = String(p.action ?? '').toLowerCase();
+        const scope = String(p.scope ?? '').toLowerCase();
+        return id.includes(q2) || resource.includes(q) || desc.includes(q) || action.includes(q) || scope.includes(q);
+      });
+    },
+
+    openRoleModal(r) {
+      this.roleError = '';
+      this.roleForm = r ? { id: r.id, slug: (r.slug || ''), name: (r.name || '') } : { id: null, slug: '', name: '' };
+      this.showRoleModal = true;
+    },
+
+    closeRoleModal() {
+      this.showRoleModal = false;
+      this.roleSaving = false;
+      this.roleError = '';
+    },
+
+    async saveRole() {
+      const slug = String(this.roleForm.slug || '').trim();
+      const name = String(this.roleForm.name || '').trim();
+
+      if (!slug || !name) {
+        this.roleError = 'Slug i nazwa są wymagane.';
+        return;
+      }
+
+      this.roleSaving = true;
+      this.roleError = '';
+
+      try {
+        const body = JSON.stringify({ slug, name });
+
+        if (this.roleForm.id) {
+          const res = await fetch(`/api/roles/${this.roleForm.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body
+          });
+          await jsonOrThrow(res);
+          this.setFlash('✅ Zaktualizowano rolę', true);
+        } else {
+          const res = await fetch('/api/roles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body
+          });
+          await jsonOrThrow(res);
+          this.setFlash('✅ Utworzono rolę', true);
+        }
+
+        this.closeRoleModal();
+        await this.loadRoles(false);
+        document.dispatchEvent(new CustomEvent('iam:roles-updated'));
+      } catch (e) {
+        this.roleError = e?.message || 'Nie udało się zapisać roli.';
+        this.setFlash(this.roleError, false);
+      } finally {
+        this.roleSaving = false;
+      }
+    },
+
+    async deleteRole(id) {
+      if (!id) return;
+      if (!confirm('Na pewno usunąć tę rolę?')) return;
+
+      try {
+        const res = await fetch(`/api/roles/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
+        await jsonOrThrow(res);
+        this.setFlash('✅ Usunięto rolę', true);
+        await this.loadRoles(false);
+        document.dispatchEvent(new CustomEvent('iam:roles-updated'));
+      } catch (e) {
+        this.setFlash(e?.message || 'Nie udało się usunąć roli.', false);
+      }
+    },
+  }
+}
+
+function rolePermissionsManager() {
+  const jsonOrThrow = async (res) => {
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('application/json')) {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = (typeof body === 'string' ? body : (body.error || body.message || JSON.stringify(body)));
+        throw new Error(msg || ('HTTP ' + res.status));
+      }
+      return body;
+    } else {
+      const text = await res.text().catch(() => '');
+      if (!res.ok) throw new Error(text || ('HTTP ' + res.status));
+      return text;
+    }
+  };
+
+  const safeArr = (x) => Array.isArray(x) ? x : (x?.data && Array.isArray(x.data) ? x.data : []);
+
+  return {
+    roleId: '',
+    roles: [],
+    permissions: [],
+    assigned: [],
+    available: [],
+    availableSearch: '',
+    error: '',
+
+    actionPL,
+    scopePL,
+    permLabel,
+
+    get filteredAvailable() {
+      const q = (this.availableSearch || '').trim().toLowerCase();
+      if (!q) return this.available;
+
+      const q2 = q.startsWith('#') ? q.slice(1) : q;
+      return this.available.filter(p => {
+        const id = String(p.id ?? '');
+        const resource = String(p.resource ?? '').toLowerCase();
+        const desc = String((p.Description ?? p.description) ?? '').toLowerCase();
+        const action = String(p.action ?? '').toLowerCase();
+        const scope = String(p.scope ?? '').toLowerCase();
+        return id.includes(q2) || resource.includes(q) || desc.includes(q) || action.includes(q) || scope.includes(q);
+      });
+    },
+
+    async init(force = false) {
+      try {
+        this.error = '';
+        const [rolesRes, permsRes] = await Promise.all([
+          fetch('/api/roles', { headers: { 'Accept': 'application/json' } }),
+          fetch('/api/permissions', { headers: { 'Accept': 'application/json' } }),
+        ]);
+
+        const rolesData = await jsonOrThrow(rolesRes);
+        const permsData = await jsonOrThrow(permsRes);
+
+        this.roles = safeArr(rolesData);
+        this.permissions = safeArr(permsData);
+
+        if (this.roleId) await this.loadAssignments();
+      } catch (e) {
+        this.error = e?.message || 'Nie udało się załadować danych.';
+      }
+
+      if (!force) {
+        document.addEventListener('iam:roles-updated', async () => {
+          try {
+            const rolesRes = await fetch('/api/roles', { headers: { 'Accept': 'application/json' } });
+            const rolesData = await jsonOrThrow(rolesRes);
+            this.roles = safeArr(rolesData);
+
+            const stillExists = this.roles.some(r => String(r.id) === String(this.roleId));
+            if (!stillExists) {
+              this.roleId = '';
+              this.assigned = [];
+              this.available = [];
+            }
+          } catch (_) {}
+        }, { once: true });
+      }
+    },
+
+    async loadAssignments() {
+      this.availableSearch = '';
+      this.assigned = [];
+      this.available = [];
+      this.error = '';
+
+      if (!this.roleId) return;
+
+      try {
+        const res = await fetch(`/api/roles/${this.roleId}/permissions`, {
+          headers: { 'Accept': 'application/json' }
+        });
+
+        // 404/204 traktujemy jako "brak przypisań"
+        let rawIds = [];
+        if (res.status === 404 || res.status === 204) {
+          rawIds = [];
+        } else {
+          const data = await jsonOrThrow(res);
+
+          // Obsługa formatów:
+          // 1) [1,2,3]
+          // 2) {data:[1,2,3]}
+          // 3) {ids:[1,2,3]} / {permission_ids:[1,2,3]}
+          // 4) [{id:1},{id:2}] / {data:[{id:1}...]} (fallback)
+          if (Array.isArray(data)) rawIds = data;
+          else if (Array.isArray(data?.data)) rawIds = data.data;
+          else if (Array.isArray(data?.ids)) rawIds = data.ids;
+          else if (Array.isArray(data?.permission_ids)) rawIds = data.permission_ids;
+          else rawIds = [];
+        }
+
+        // Normalizacja do Set[int]
+        const ids = (rawIds || [])
+          .map(x => {
+            // x może być liczbą, stringiem albo obiektem {id:...}
+            const v = (x && typeof x === 'object') ? (x.id ?? x.ID) : x;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : null;
+          })
+          .filter(n => n !== null);
+
+        const set = new Set(ids);
+
+        // Jeżeli rola nie ma przypisań -> available powinno być "wszystko"
+        this.assigned = this.permissions.filter(p => set.has(Number(p.id)));
+        this.available = this.permissions.filter(p => !set.has(Number(p.id)));
+
+      } catch (e) {
+        // Nawet przy błędzie po stronie endpointu przypisań,
+        // lepiej pokazać "wszystkie dostępne", niż pustą listę.
+        this.error = e?.message || 'Nie udało się pobrać przypisań.';
+        this.assigned = [];
+        this.available = Array.isArray(this.permissions) ? this.permissions : [];
+      }
+    },
+
+    async assign(permId) {
+      if (!this.roleId || !permId) return;
+      try {
+        const res = await fetch(`/api/roles/${this.roleId}/permissions/${permId}`, { method: 'POST' });
+        await jsonOrThrow(res);
+        await this.loadAssignments();
+      } catch (e) {
+        this.error = e?.message || 'Nie udało się przypisać uprawnienia.';
+      }
+    },
+
+    async remove(permId) {
+      if (!this.roleId || !permId) return;
+      try {
+        const res = await fetch(`/api/roles/${this.roleId}/permissions/${permId}`, { method: 'DELETE' });
+        await jsonOrThrow(res);
+        await this.loadAssignments();
+      } catch (e) {
+        this.error = e?.message || 'Nie udało się usunąć uprawnienia z roli.';
+      }
+    },
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

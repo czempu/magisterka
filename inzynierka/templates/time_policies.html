@@ -1,0 +1,450 @@
+{{ define "time_policies.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-4xl mx-auto p-4 md:p-6 space-y-6"
+     x-data="timePoliciesPage()"
+     x-init="init()">
+
+
+  <!-- ALERTY -->
+  <template x-if="error">
+    <div class="p-3 md:p-4 rounded-xl border border-red-300 bg-red-50 text-xs md:text-sm text-red-800 flex items-start gap-2">
+      <span class="mt-0.5"></span>
+      <span x-text="error"></span>
+    </div>
+  </template>
+  <template x-if="success">
+    <div class="p-3 md:p-4 rounded-xl border border-emerald-300 bg-emerald-50 text-xs md:text-sm text-emerald-800 flex items-start gap-2">
+      <span class="mt-0.5">✔</span>
+      <span x-text="success"></span>
+    </div>
+  </template>
+
+  <!-- LISTA POLITYK -->
+  <section class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+    <div class="w-full overflow-x-auto">
+      <table class="min-w-full text-xs md:text-sm">
+        <thead class="bg-gray-100 text-gray-700 uppercase text-[10px] md:text-xs">
+          <tr>
+            <th class="p-2 text-left whitespace-nowrap">Okres</th>
+            <th class="p-2 text-left whitespace-nowrap">Okno startu</th>
+            <th class="p-2 text-left whitespace-nowrap">Najpóźniejszy koniec</th>
+            <th class="p-2 text-left whitespace-nowrap">Flex</th>
+            <th class="p-2 text-left whitespace-nowrap">Akcje</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="policies.length === 0">
+            <tr>
+              <td colspan="5" class="p-4 text-center text-gray-500 text-xs md:text-sm">
+                Brak zdefiniowanych polityk czasu pracy.
+              </td>
+            </tr>
+          </template>
+
+          <template x-for="p in policies" :key="p.id">
+            <tr class="border-t hover:bg-gray-50 cursor-pointer"
+                @click="editPolicy(p)">
+              <td class="p-2 whitespace-nowrap">
+                <div class="flex flex-col">
+                  <span class="font-medium text-xs md:text-sm" x-text="formatRange(p)"></span>
+                </div>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+                <template x-if="p.earliest_start && p.latest_start">
+                  <span x-text="`${p.earliest_start} – ${p.latest_start}`"></span>
+                </template>
+                <template x-if="!(p.earliest_start && p.latest_start)">
+                  <span class="text-gray-400 text-[11px]">nie ustawiono</span>
+                </template>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+                <template x-if="p.latest_end">
+                  <span x-text="p.latest_end"></span>
+                </template>
+                <template x-if="!p.latest_end">
+                  <span class="text-gray-400 text-[11px]">nie ustawiono</span>
+                </template>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px]"
+                      :class="p.flex ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-50 text-gray-600 border border-gray-200'">
+                  <span x-text="p.flex ? 'Flex włączony' : 'Brak flexa'"></span>
+                </span>
+              </td>
+              <td class="p-2 whitespace-nowrap">
+{{ if or (index .PermissionsSet "timepolicy:update:org") (index .PermissionsSet "*:*:org")  }}
+                <div class="flex items-center gap-2">
+                  <button type="button"
+                          class="px-2 py-1 text-[11px] md:text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
+                          @click.stop="editPolicy(p)">
+                    Edytuj
+                  </button>
+
+                  <!-- DODANE: USUWANIE -->
+                  <button type="button"
+                          class="px-2 py-1 text-[11px] md:text-xs border border-red-200 text-red-700 rounded-lg hover:bg-red-50"
+                          @click.stop="deletePolicy(p)">
+                    Usuń
+                  </button>
+                </div>
+		{{else}}
+		Brak Uprawnień
+		{{end}}
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+{{ if or (index .PermissionsSet "timepolicy:update:org") (index .PermissionsSet "*:*:org")  }}
+  <!-- FORMULARZ POLITYKI -->
+  <section class="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 md:p-5 space-y-4">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h2 class="text-sm md:text-base font-semibold">
+          <span x-text="form.id ? 'Edytuj politykę czasu pracy' : 'Dodaj nową politykę czasu pracy'"></span>
+        </h2>
+        <p class="text-[11px] md:text-xs text-gray-500">
+          Definiuje firmowe ramy czasu pracy (dla walidacji grafiku i rozliczeń).
+        </p>
+      </div>
+      <button type="button"
+              class="text-[11px] md:text-xs text-gray-500 hover:text-gray-700"
+              @click="resetForm">
+        Wyczyść formularz
+      </button>
+    </div>
+
+    <form class="space-y-4" @submit.prevent="savePolicy">
+      <!-- Okres obowiązywania -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+            Obowiązuje od
+          </label>
+          <input type="date"
+                 x-model="form.effective_from"
+                 class="w-full border border-gray-300 rounded-lg p-2 text-xs md:text-sm focus:ring-lime-500 focus:border-lime-500" />
+        </div>
+        <div>
+          <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+            Obowiązuje do (opcjonalnie)
+          </label>
+          <input type="date"
+                 x-model="form.effective_to"
+                 class="w-full border border-gray-300 rounded-lg p-2 text-xs md:text-sm focus:ring-lime-500 focus:border-lime-500" />
+          <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+            Puste = polityka obowiązuje bezterminowo do czasu wprowadzenia kolejnej.
+          </p>
+        </div>
+        <div class="flex items-end">
+          <label class="inline-flex items-center gap-2 text-[11px] md:text-xs text-gray-600">
+            <input type="checkbox"
+                   class="rounded border-gray-300 text-lime-600 focus:ring-lime-500 accent-lime-500"
+                   x-model="form.flex">
+            <span>Flex dopuszczony w tym okresie</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Okno czasowe -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Start -->
+        <div>
+          <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+            Okno startu dnia pracy
+          </label>
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2">
+		    <span class="w-14 text-[11px] text-gray-500">Od</span>
+              <div class="flex items-center gap-1">
+                <input type="number" min="0" max="23"
+                       x-model.number="form.earliest_start_hour"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] focus:ring-lime-500 focus:border-lime-500"
+                       placeholder="hh" />
+                <span class="text-[11px] text-gray-500">:</span>
+                <input type="number" min="0" max="59"
+                       x-model.number="form.earliest_start_minute"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] focus:ring-lime-500 focus:border-lime-500"
+                       placeholder="mm" />
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-14 text-[11px] text-gray-500">Do</span>
+              <div class="flex items-center gap-1">
+                <input type="number" min="0" max="23"
+                       x-model.number="form.latest_start_hour"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] focus:ring-lime-500 focus:border-lime-500"
+                       placeholder="hh" />
+                <span class="text-[11px] text-gray-500">:</span>
+                <input type="number" min="0" max="59"
+                       x-model.number="form.latest_start_minute"
+                       class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] focus:ring-lime-500 focus:border-lime-500"
+                       placeholder="mm" />
+              </div>
+            </div>
+          </div>
+          <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+            Dopuszczalne okno rozpoczęcia pracy (np. 06:00–09:00).
+          </p>
+        </div>
+
+        <!-- Latest end -->
+        <div>
+          <label class="block text-[11px] md:text-s font-medium text-gray-700 mb-1">
+            Najpóźniejszy koniec dnia pracy
+          </label>
+          <div class="flex items-center gap-3">
+            <span class="w-16 text-[11px] text-gray-500">Najpóźniejszy koniec dnia pracy</span>
+            <div class="flex items-center gap-1">
+              <input type="number" min="0" max="23"
+                     x-model.number="form.latest_end_hour"
+                     class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] focus:ring-lime-500 focus:border-lime-500"
+                     placeholder="hh" />
+              <span class="text-[11px] text-gray-500">:</span>
+              <input type="number" min="0" max="59"
+                     x-model.number="form.latest_end_minute"
+                     class="w-12 border border-gray-300 rounded-lg p-1 text-center text-[11px] focus:ring-lime-500 focus:border-lime-500"
+                     placeholder="mm" />
+            </div>
+          </div>
+          <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+            Granica, po której praca zawsze będzie traktowana jako potencjalne nadgodziny/naruszenie.
+          </p>
+        </div>
+      </div>
+
+      <!-- AKCJE -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
+        <div class="text-[11px] md:text-xs text-gray-500">
+          Dane polityki są używane przy walidacji grafiku i rozliczaniu doby pracowniczej.
+        </div>
+        <button type="submit"
+                class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 bg-black text-white rounded-lg hover:bg-lime-700 text-xs md:text-sm">
+          Zapisz politykę
+        </button>
+      </div>
+    </form>
+  </section>
+	{{else}}
+	{{end}}
+
+
+</div>
+
+<script>
+function timePoliciesPage() {
+  return {
+    policies: [],
+    error: null,
+    success: null,
+
+    form: {
+      id: null,
+      effective_from: '',
+      effective_to: '',
+      flex: false,
+      earliest_start_hour: null,
+      earliest_start_minute: null,
+      latest_start_hour: null,
+      latest_start_minute: null,
+      latest_end_hour: null,
+      latest_end_minute: null,
+    },
+
+    pad2(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return '00';
+      return String(v).padStart(2, '0');
+    },
+
+    formatRange(p) {
+      const from = (p.effective_from || '').split('T')[0];
+      const to = p.effective_to ? p.effective_to.split('T')[0] : null;
+      if (to) return `${from} – ${to}`;
+      return `${from} → ∞`;
+    },
+
+    resetForm() {
+      this.error = null;
+      this.success = null;
+      this.form.id = null;
+      this.form.effective_from = '';
+      this.form.effective_to = '';
+      this.form.flex = false;
+      this.form.earliest_start_hour = null;
+      this.form.earliest_start_minute = null;
+      this.form.latest_start_hour = null;
+      this.form.latest_start_minute = null;
+      this.form.latest_end_hour = null;
+      this.form.latest_end_minute = null;
+    },
+
+    editPolicy(p) {
+      this.error = null;
+      this.success = null;
+
+      this.form.id = p.id;
+      this.form.effective_from = (p.effective_from || '').split('T')[0];
+      this.form.effective_to = p.effective_to ? p.effective_to.split('T')[0] : '';
+
+      this.form.flex = !!p.flex;
+
+      if (p.earliest_start) {
+        const [h, m] = p.earliest_start.split(':');
+        this.form.earliest_start_hour = Number(h);
+        this.form.earliest_start_minute = Number(m);
+      } else {
+        this.form.earliest_start_hour = null;
+        this.form.earliest_start_minute = null;
+      }
+
+      if (p.latest_start) {
+        const [h, m] = p.latest_start.split(':');
+        this.form.latest_start_hour = Number(h);
+        this.form.latest_start_minute = Number(m);
+      } else {
+        this.form.latest_start_hour = null;
+        this.form.latest_start_minute = null;
+      }
+
+      if (p.latest_end) {
+        const [h, m] = p.latest_end.split(':');
+        this.form.latest_end_hour = Number(h);
+        this.form.latest_end_minute = Number(m);
+      } else {
+        this.form.latest_end_hour = null;
+        this.form.latest_end_minute = null;
+      }
+    },
+
+    async loadPolicies() {
+      this.error = null;
+      this.success = null;
+      this.policies = [];
+
+      try {
+        const res = await fetch('/api/time-policies');
+        if (!res.ok) throw new Error('Nie udało się pobrać polityk czasu pracy');
+        const json = await res.json();
+        const data = json.data || [];
+        this.policies = data;
+      } catch (e) {
+        console.error(e);
+        this.error = e.message || 'Błąd pobierania polityk';
+      }
+    },
+
+    async savePolicy() {
+      this.error = null;
+      this.success = null;
+
+      if (!this.form.effective_from) {
+        this.error = 'Podaj datę rozpoczęcia obowiązywania polityki.';
+        return;
+      }
+
+      const payload = {
+        id: this.form.id || 0,
+        effective_from: this.form.effective_from,
+        effective_to: this.form.effective_to || null,
+        flex: !!this.form.flex,
+        earliest_start: (this.form.earliest_start_hour != null && this.form.earliest_start_minute != null)
+          ? `${this.pad2(this.form.earliest_start_hour)}:${this.pad2(this.form.earliest_start_minute)}`
+          : null,
+        latest_start: (this.form.latest_start_hour != null && this.form.latest_start_minute != null)
+          ? `${this.pad2(this.form.latest_start_hour)}:${this.pad2(this.form.latest_start_minute)}`
+          : null,
+        latest_end: (this.form.latest_end_hour != null && this.form.latest_end_minute != null)
+          ? `${this.pad2(this.form.latest_end_hour)}:${this.pad2(this.form.latest_end_minute)}`
+          : null,
+      };
+
+      try {
+        const res = await fetch('/api/time-policies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          let msg = 'Nie udało się zapisać polityki';
+          try {
+            const err = await res.json();
+            msg = err.error || msg;
+          } catch (_) {}
+          this.error = msg;
+          return;
+        }
+
+        this.success = 'Polityka zapisana poprawnie.';
+        await this.loadPolicies();
+      } catch (e) {
+        console.error(e);
+        this.error = 'Błąd podczas zapisu polityki';
+      }
+    },
+
+    // DODANE: usuwanie polityki (DELETE /time-policies/:tpid)
+    async deletePolicy(p) {
+      this.error = null;
+      this.success = null;
+
+      const id = p?.id;
+      if (!id) return;
+
+      const ok = confirm(`Usunąć politykę (#${id})?`);
+      if (!ok) return;
+
+      try {
+        const res = await fetch(`/api/time-policies/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' }
+        });
+
+        let j = null;
+        try { j = await res.json(); } catch (_) { j = null; }
+
+        // obsłuż payload {error:"..."} także przy 200
+        if (j && typeof j === 'object' && j.error) {
+          this.error = j.error;
+          return;
+        }
+
+        if (!res.ok) {
+          this.error = (j && typeof j === 'object' && (j.message || j.data))
+            ? (j.message || j.data)
+            : `Nie udało się usunąć polityki (HTTP ${res.status}).`;
+          return;
+        }
+
+        const msg = (j && typeof j === 'object' && (j.message || j.data))
+          ? (j.message || j.data)
+          : 'Polityka została usunięta.';
+        this.success = msg;
+
+        // jeśli skasowano aktualnie edytowaną politykę — wyczyść formularz
+        if (String(this.form.id || '') === String(id)) {
+          this.resetForm();
+        }
+
+        await this.loadPolicies();
+      } catch (e) {
+        console.error(e);
+        this.error = e?.message || 'Błąd podczas usuwania polityki';
+      }
+    },
+
+    init() {
+      this.loadPolicies();
+    },
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

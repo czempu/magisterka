@@ -1,0 +1,10 @@
+{
+  "hero_title": "Rejestruj i analizuj czas pracy w jednym miejscu",
+  "hero_desc": "System zaprojektowany dla Małych i Średnich Przedsiębiorstw w Polsce. Zgodny z Kodeksem Pracy (art. 130 KP, art. 132 KP 11h odpoczynku, okno nocne 22:00–06:00).",
+  "module_schedule_title": "Moduł – Grafik pracy",
+  "module_schedule_desc": "Zarządzaj, analizuj i planuj harmonogramy, które odmienią funkcjonowanie Twojej firmy.",
+  "module_org_title": "Moduł – Organizacja",
+  "module_org_desc": "Odwzoruj strukturę firmy, działy, zespoły i wielopoziomowe ścieżki akceptacji wniosków.",
+  "module_api_title": "Moduł – Developer API",
+  "module_api_desc": "Nowoczesna, w pełni udokumentowana specyfikacja REST API i Swagger dla programistów."
+}

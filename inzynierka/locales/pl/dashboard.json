@@ -1,0 +1,18 @@
+{
+  "active_employees": "Aktywni pracownicy",
+  "loading_chart": "Ładowanie wykresu…",
+  "work_time": "Twój czas pracy",
+  "status_in_progress": "w toku",
+  "status_inactive": "nieaktywny",
+  "loading_state": "Ładowanie stanu…",
+  "recent_leaves": "Ostatnie wnioski urlopowe",
+  "no_leaves": "Brak wniosków urlopowych.",
+  "status_approved": "zatwierdzony",
+  "pending_approvals": "Oczekujące akceptacje",
+  "pending_approvals_desc": "Najbliższe wnioski przypisane do Ciebie jako akceptującego.",
+  "go_to_approvals": "Przejdź do akceptacji wniosków",
+  "no_pending_approvals": "Brak oczekujących akceptacji.",
+  "type": "Typ",
+  "range": "Zakres",
+  "step": "Krok"
+}

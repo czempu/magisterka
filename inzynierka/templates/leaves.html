@@ -1,0 +1,246 @@
+{{ define "leaves.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-6xl mx-auto p-4 md:p-8 space-y-6"
+     x-data="leavesPage({ userId: {{ .User.ID }} })"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header class="space-y-1">
+    <h1 class="text-lg md:text-xl font-semibold text-black" x-text="$store.i18n ? $store.i18n.t('leaves.heading', 'Urlopy') : 'Urlopy'">Urlopy</h1>
+    <p class="text-xs md:text-sm text-gray-600" x-text="$store.i18n ? $store.i18n.t('leaves.desc', 'Podgląd wniosków urlopowych. Zakładka „Moje urlopy” pokazuje Twoje wnioski, a „Urlopy ogólnie” całość (dla uprawnionych).') : 'Podgląd wniosków urlopowych. Zakładka „Moje urlopy” pokazuje Twoje wnioski, a „Urlopy ogólnie” całość (dla uprawnionych).'">
+      Podgląd wniosków urlopowych. Zakładka „Moje urlopy” pokazuje Twoje wnioski, a „Urlopy ogólnie” całość (dla uprawnionych).
+    </p>
+  </header>
+
+  <!-- ACTIONS -->
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex items-center gap-2">
+      <span id="count-badge"
+            class="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600 bg-slate-50">—</span>
+
+      <button
+        class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs md:text-sm font-medium shadow-sm hover:bg-slate-50 active:translate-y-px"
+        type="button"
+        @click="refresh()"
+        x-text="$store.i18n ? $store.i18n.t('leaves.refresh', 'Odśwież') : 'Odśwież'">
+        Odśwież
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between gap-3">
+      <a href="/app/leaves/add" class="text-sm md:text-base text-lime-600 hover:underline" x-text="$store.i18n ? $store.i18n.t('leaves.add_request', 'Dodaj wniosek') : 'Dodaj wniosek'">
+        Dodaj wniosek
+      </a>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <nav class="flex border-b border-gray-200 text-sm">
+    <button type="button"
+            @click="setTab('mine')"
+            class="px-4 py-2 -mb-px border-b-2"
+            :class="activeTab === 'mine'
+              ? 'border-lime-600 text-lime-700 font-medium'
+              : 'border-transparent text-gray-500 hover:text-gray-700'"
+            x-text="$store.i18n ? $store.i18n.t('leaves.tab_mine', 'Moje urlopy') : 'Moje urlopy'">
+      Moje urlopy
+    </button>
+
+    <button type="button"
+            @click="setTab('all')"
+            class="px-4 py-2 -mb-px border-b-2"
+            :class="activeTab === 'all'
+              ? 'border-lime-600 text-lime-700 font-medium'
+              : 'border-transparent text-gray-500 hover:text-gray-700'"
+            x-text="$store.i18n ? $store.i18n.t('leaves.tab_all', 'Urlopy ogólnie') : 'Urlopy ogólnie'">
+      Urlopy ogólnie
+    </button>
+  </nav>
+
+  <!-- LISTA -->
+  <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+
+    <div class="border-b border-slate-200 bg-slate-50 px-4 py-3 flex justify-between items-center">
+      <span class="text-xs md:text-sm font-medium text-slate-700"
+            x-text="activeTab === 'mine' ? ($store.i18n ? $store.i18n.t('leaves.results_mine', 'Wyniki: moje urlopy') : 'Wyniki: moje urlopy') : ($store.i18n ? $store.i18n.t('leaves.results_all', 'Wyniki: urlopy ogólnie') : 'Wyniki: urlopy ogólnie')"></span>
+
+      <div id="loading" class="hidden items-center gap-2 text-xs md:text-sm text-slate-600">
+        <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"></circle>
+          <path class="opacity-75" d="M4 12a8 8 0 0 1 8-8" stroke="currentColor"></path>
+        </svg>
+        <span x-text="$store.i18n ? $store.i18n.t('common.loading', 'Ładowanie…') : 'Ładowanie…'">Ładowanie…</span>
+      </div>
+    </div>
+
+    <div class="w-full overflow-x-auto">
+      <table class="min-w-full border-separate border-spacing-0 text-xs md:text-sm">
+        <thead>
+          <tr class="text-left text-slate-600 bg-slate-50">
+            <th class="px-4 py-3 border-b whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('leaves.th_id', 'ID') : 'ID'">ID</th>
+            <th class="px-4 py-3 border-b whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('leaves.th_user', 'Użytkownik') : 'Użytkownik'">Użytkownik</th>
+            <th class="px-4 py-3 border-b whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('leaves.th_status', 'Status') : 'Status'">Status</th>
+            <th class="px-4 py-3 border-b whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('leaves.th_type', 'Typ urlopu') : 'Typ urlopu'">Typ urlopu</th>
+            <th class="px-4 py-3 border-b whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('leaves.th_submitted', 'Zgłoszono') : 'Zgłoszono'">Zgłoszono</th>
+            <th class="px-4 py-3 border-b text-right whitespace-nowrap" x-text="$store.i18n ? $store.i18n.t('leaves.th_actions', 'Akcje') : 'Akcje'">Akcje</th>
+          </tr>
+        </thead>
+        <tbody id="rows" class="text-xs md:text-sm"></tbody>
+      </table>
+    </div>
+
+    <div id="empty" class="p-6 md:p-8 text-center hidden">
+      <p class="text-slate-700 font-medium text-sm md:text-base" x-text="$store.i18n ? $store.i18n.t('leaves.no_leaves', 'Brak wniosków do wyświetlenia.') : 'Brak wniosków do wyświetlenia.'">Brak wniosków do wyświetlenia.</p>
+    </div>
+
+    <div id="error" class="p-4 text-xs md:text-sm text-red-700 hidden" x-text="$store.i18n ? $store.i18n.t('leaves.error_loading', 'Nie udało się pobrać wniosków.') : 'Nie udało się pobrać wniosków.'">
+      Nie udało się pobrać wniosków.
+    </div>
+
+  </section>
+
+  <!-- AUTO LOAD (będzie przełączany + zawsze odświeżany przy zmianie zakładki) -->
+  <div id="auto-load"
+       hx-get="/api/request?user_id={{ .User.ID }}"
+       hx-headers='{"Accept":"application/json"}'
+       hx-trigger="load"
+       hx-swap="none"
+       class="hidden"></div>
+
+</div>
+
+<script>
+  // utils
+  const $ = (s) => document.querySelector(s);
+  const show = (el) => el && el.classList.remove('hidden');
+  const hide = (el) => el && el.classList.add('hidden');
+
+  function statusPL(v) {
+    const s = String(v ?? '').trim().toLowerCase();
+    if (s === 'approved') return 'Zatwierdzony';
+    if (s === 'pending')  return 'Oczekuje';
+    if (s === 'rejected') return 'Odrzucony';
+    if (s === 'cancelled') return 'Anulowany';
+    return v ?? '—';
+  }
+
+  function escapeHtml(x) {
+    return String(x ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function renderRows(list) {
+    const tbody = $('#rows');
+
+    if (!Array.isArray(list) || list.length === 0) {
+      tbody.innerHTML = '';
+      show($('#empty'));
+      $('#count-badge').textContent = '0 pozycji';
+      return;
+    }
+
+    hide($('#empty'));
+
+    tbody.innerHTML = list.map(item => `
+      <tr class="group transition hover:bg-slate-50">
+        <td class="px-4 py-3 border-b font-mono text-slate-700 whitespace-nowrap">
+          <a href="/app/leaves/${escapeHtml(item.ID)}"
+             class="underline decoration-dotted underline-offset-4 hover:text-slate-900">#${escapeHtml(item.ID)}</a>
+        </td>
+        <td class="px-4 py-3 border-b">${escapeHtml(item.Username ?? '—')}</td>
+        <td class="px-4 py-3 border-b">${escapeHtml(statusPL(item.Status))}</td>
+        <td class="px-4 py-3 border-b">${escapeHtml(item.Type)}</td>
+        <td class="px-4 py-3 border-b whitespace-nowrap">${escapeHtml(item.CreatedAt)}</td>
+        <td class="px-4 py-3 border-b text-right">
+          <a href="/app/leaves/${escapeHtml(item.ID)}"
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-slate-50">
+            Szczegóły
+          </a>
+        </td>
+      </tr>
+    `).join('');
+
+    $('#count-badge').textContent = `${list.length} pozycji`;
+  }
+
+  function leavesPage({ userId }) {
+    return {
+      userId: Number(userId || 0),
+      activeTab: 'mine',
+
+      init() {
+        // start: moje
+        this.setTab('mine', true);
+      },
+
+      buildUrl() {
+        // mine -> filtr po user_id (bez scope)
+        if (this.activeTab === 'mine') {
+          const uid = this.userId || 0;
+          return `/api/request?user_id=${encodeURIComponent(uid)}`;
+        }
+        // all -> bez filtra
+        return `/api/request`;
+      },
+
+      setTab(tab, initial = false) {
+        this.activeTab = tab;
+
+        const el = $('#auto-load');
+        if (!el) return;
+
+        // podmień endpoint i wymuś fetch (HTMX nie zawsze sam wystartuje po zmianie atrybutu)
+        el.setAttribute('hx-get', this.buildUrl());
+
+        // zawsze odświeżaj po przełączeniu (i przy init też)
+        this.refresh();
+      },
+
+      refresh() {
+        const el = $('#auto-load');
+        if (!el) return;
+        hide($('#error'));
+        show($('#loading'));
+
+        // WYMUSZENIE: htmx.ajax zamiast trigger('load')
+        // (trigger potrafi się nie odpalić gdy element jest hidden / load już się zdarzył)
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+          window.htmx.ajax('GET', el.getAttribute('hx-get'), {
+            target: el,
+            swap: 'none',
+            headers: { 'Accept': 'application/json' }
+          });
+        } else if (window.htmx) {
+          window.htmx.trigger(el, 'load');
+        }
+      }
+    }
+  }
+
+  // HTMX global handlers
+  document.body.addEventListener('htmx:beforeRequest', (e) => {
+    if ((e.detail?.path || '').includes('/api/request')) {
+      hide($('#error'));
+      show($('#loading'));
+    }
+  });
+
+  document.body.addEventListener('htmx:afterRequest', (e) => {
+    if (!(e.detail?.xhr) || !String(e.detail.xhr.responseURL || '').includes('/api/request')) return;
+    hide($('#loading'));
+
+    try {
+      const payload = JSON.parse(e.detail.xhr.responseText || '{}');
+      renderRows(payload.data || []);
+    } catch {
+      show($('#error'));
+      renderRows([]);
+    }
+  });
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

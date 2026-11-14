@@ -1,0 +1,440 @@
+{{ define "user_schedule_weekly.html" }}
+{{ template "layout-start" . }}
+
+<div class="max-w-4xl mx-auto p-4 md:p-6 space-y-6"
+     x-data="weeklySchedule({ userId: '{{ .TargetUser.ID }}', week: '{{ .Week.WEEK }}' })"
+     x-init="init()">
+
+  <!-- HEADER -->
+  <header>
+    <h1 class="text-lg md:text-xl font-semibold mb-0.5">Tygodniowy grafik</h1>
+    <p class="hidden sm:block text-xs md:text-sm text-gray-500">
+      Plan do wykonania (tygodniowy).     </p>
+  </header>
+
+  <!-- ALERTY -->
+  <template x-if="error">
+    <div class="p-3 md:p-4 bg-red-50 border border-red-300 rounded-xl text-xs md:text-sm text-red-800 flex gap-2">
+      <span class="mt-0.5"></span>
+      <span x-text="error"></span>
+    </div>
+  </template>
+  <template x-if="success">
+    <div class="p-3 md:p-4 bg-green-50 border border-green-300 rounded-xl text-xs md:text-sm text-green-800 flex gap-2">
+      <span class="mt-0.5">✔</span>
+      <span x-text="success"></span>
+    </div>
+  </template>
+
+  <!-- Zakres obowiązywania -->
+  <section class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 md:p-5">
+    <h2 class="text-base md:text-lg font-semibold mb-3">Zakres obowiązywania grafiku</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Obowiązuje od</label>
+        <input type="date" x-model="effective_from"
+               style="accent-color:#65a30d;"
+               class="w-full p-2 border rounded-lg text-sm outline-none transition-colors
+                      focus:border-lime-500 focus:ring-2 focus:ring-lime-500" />
+      </div>
+      <div>
+        <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Obowiązuje do (opcjonalnie)</label>
+        <input type="date" x-model="effective_to"
+               style="accent-color:#65a30d;"
+               class="w-full p-2 border rounded-lg text-sm outline-none transition-colors
+                      focus:border-lime-500 focus:ring-2 focus:ring-lime-500" />
+        <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+          Puste = grafik obowiązuje aż do wprowadzenia kolejnego.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TYGODNIOWKA -->
+  <section class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+    <form class="divide-y" @submit.prevent="save">
+
+      <template x-for="(day, index) in days" :key="day.dow">
+        <div class="flex flex-col gap-3 p-3 md:p-4 hover:bg-gray-50">
+
+          <!-- Wiersz tytułowy -->
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="font-medium text-sm md:text-base" x-text="$store.i18n ? $store.i18n.t('schedule.dow_' + ['mon','tue','wed','thu','fri','sat','sun'][day.dow-1], day.name) : day.name"></div>
+              <div class="text-[11px] md:text-xs text-gray-500">
+                Planowany wymiar + ramy czasowe dla tego dnia.
+              </div>
+            </div>
+
+            <label class="inline-flex items-center gap-2 text-[11px] md:text-xs text-gray-600">
+              <input type="checkbox"
+                     style="accent-color:#65a30d;"
+                     class="rounded border-gray-300 focus:ring-2 focus:ring-lime-500"
+                     x-model="day.is_working">
+              <span x-text="$store.i18n ? $store.i18n.t('schedule.working_day', 'Dzień pracujący') : 'Dzień pracujący'">Dzień pracujący</span>
+            </label>
+          </div>
+
+          <!-- Wiersz z wymiarem + flex + godziny -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4"
+               :class="day.is_working ? '' : 'opacity-60 pointer-events-none'">
+
+            <!-- Wymiar dnia -->
+            <div>
+              <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+                Wymiar dnia (plan)
+              </label>
+              <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1">
+                  <input type="number" min="0" max="24"
+                         x-model.number="day.hours"
+                         class="w-16 border rounded-lg p-1 text-center text-xs md:text-sm outline-none transition-colors
+                                focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                         placeholder="h" />
+                  <span class="text-[11px] text-gray-500">h</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input type="number" min="0" max="59"
+                         x-model.number="day.minutes"
+                         class="w-16 border rounded-lg p-1 text-center text-xs md:text-sm outline-none transition-colors
+                                focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                         placeholder="min" />
+                  <span class="text-[11px] text-gray-500">min</span>
+                </div>
+              </div>
+              <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+                Planowany wymiar pracy w tym dniu (nominał do porównania z wykonaniem).
+              </p>
+            </div>
+
+            <!-- Tryb dnia: flex vs stałe okno -->
+            <div>
+              <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+                Tryb dnia
+              </label>
+              <label class="inline-flex items-center gap-2 text-[11px] md:text-xs text-gray-600">
+                <input type="checkbox"
+                       style="accent-color:#65a30d;"
+                       class="rounded border-gray-300 focus:ring-2 focus:ring-lime-500"
+                       x-model="day.flex">
+                <span>Dzień elastyczny (earliest/latest start, latest end)</span>
+              </label>
+              <p class="mt-1 text-[11px] md:text-xs text-gray-400">
+                Odznacz, jeśli chcesz zaplanować bardzo sztywne godziny poza polityką firmy.
+              </p>
+            </div>
+
+            <!-- Okno czasowe dnia -->
+            <div>
+              <label class="block text-[11px] md:text-xs font-medium text-gray-700 mb-1">
+                Okno czasu pracy
+              </label>
+
+              <div class="space-y-1.5">
+                <!-- earliest / latest start -->
+                <div class="flex items-center gap-2">
+                  <span class="w-16 text-[11px] text-gray-500">Start</span>
+                  <div class="flex items-center gap-1">
+                    <input type="number" min="0" max="23"
+                           x-model.number="day.earliest_start_hour"
+                           class="w-12 border rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                                  focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                           placeholder="od hh" />
+                    <span class="text-[11px] text-gray-500">:</span>
+                    <input type="number" min="0" max="59"
+                           x-model.number="day.earliest_start_minute"
+                           class="w-12 border rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                                  focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                           placeholder="mm" />
+                  </div>
+                  <span class="text-[11px] text-gray-400">–</span>
+                  <div class="flex items-center gap-1">
+                    <input type="number" min="0" max="23"
+                           x-model.number="day.latest_start_hour"
+                           class="w-12 border rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                                  focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                           placeholder="do hh" />
+                    <span class="text-[11px] text-gray-500">:</span>
+                    <input type="number" min="0" max="59"
+                           x-model.number="day.latest_start_minute"
+                           class="w-12 border rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                                  focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                           placeholder="mm" />
+                  </div>
+                </div>
+
+                <!-- latest end -->
+                <div class="flex items-center gap-2">
+                  <span class="w-16 text-[11px] text-gray-500">Koniec max</span>
+                  <div class="flex items-center gap-1">
+                    <input type="number" min="0" max="23"
+                           x-model.number="day.latest_end_hour"
+                           class="w-12 border rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                                  focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                           placeholder="hh" />
+                    <span class="text-[11px] text-gray-500">:</span>
+                    <input type="number" min="0" max="59"
+                           x-model.number="day.latest_end_minute"
+                           class="w-12 border rounded-lg p-1 text-center text-[11px] outline-none transition-colors
+                                  focus:border-lime-500 focus:ring-2 focus:ring-lime-500"
+                           placeholder="mm" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-2 flex items-center justify-between">
+                <label class="inline-flex items-center gap-2 text-[11px] md:text-xs text-gray-600">
+                  <input type="checkbox"
+                         style="accent-color:#65a30d;"
+                         class="rounded border-gray-300 focus:ring-2 focus:ring-lime-500"
+                         x-model="day.spans_midnight"
+                         :disabled="!day.is_working">
+                  <span>Zmiana przechodzi przez północ</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Podsumowanie dnia -->
+          <div class="flex justify-between items-center text-[11px] md:text-xs text-gray-500 pt-1 border-t border-gray-100">
+            <div>
+              <template x-if="day.is_working">
+                <span>Suma dnia:
+                  <span class="font-medium text-gray-700" x-text="formatMinutes(day.plannedMinutes())"></span>
+                </span>
+              </template>
+              <template x-if="!day.is_working">
+                <span class="italic text-gray-400">Dzień wolny (plan = 0 min).</span>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- AKCJE -->
+      <div class="p-3 md:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+   {{ if or (index .PermissionsSet "schedule:update:org") (index .PermissionsSet "*:*:org")  }}     
+        <button class="w-full sm:w-auto px-4 py-2 bg-black text-white rounded-lg hover:bg-lime-700 text-xs md:text-sm">
+          <span x-text="$store.i18n ? $store.i18n.t('schedule.save_schedule', 'Zapisz grafik') : 'Zapisz grafik'">Zapisz grafik</span>
+        </button>
+	{{else}}
+		Brak Uprawnień do edycji
+	{{end}}
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+function weeklySchedule({ userId, week }) {
+  return {
+    userId,
+    week,
+    effective_from: '',
+    effective_to: '',
+    error: null,
+    success: null,
+
+    days: [
+      { dow: 1, name: 'Poniedziałek' , planned_minutes: 0, hours: 8, minutes: 0,
+        flex: true, spans_midnight: false, is_working: true,
+        earliest_start_hour: 8, earliest_start_minute: 0,
+        latest_start_hour: 9, latest_start_minute: 0,
+        latest_end_hour: 17, latest_end_minute: 0 },
+      { dow: 2, name: 'Wtorek'       , planned_minutes: 0, hours: 8, minutes: 0,
+        flex: true, spans_midnight: false, is_working: true,
+        earliest_start_hour: 8, earliest_start_minute: 0,
+        latest_start_hour: 9, latest_start_minute: 0,
+        latest_end_hour: 17, latest_end_minute: 0 },
+      { dow: 3, name: 'Środa'        , planned_minutes: 0, hours: 8, minutes: 0,
+        flex: true, spans_midnight: false, is_working: true,
+        earliest_start_hour: 8, earliest_start_minute: 0,
+        latest_start_hour: 9, latest_start_minute: 0,
+        latest_end_hour: 17, latest_end_minute: 0 },
+      { dow: 4, name: 'Czwartek'     , planned_minutes: 0, hours: 8, minutes: 0,
+        flex: true, spans_midnight: false, is_working: true,
+        earliest_start_hour: 8, earliest_start_minute: 0,
+        latest_start_hour: 9, latest_start_minute: 0,
+        latest_end_hour: 17, latest_end_minute: 0 },
+      { dow: 5, name: 'Piątek'       , planned_minutes: 0, hours: 8, minutes: 0,
+        flex: true, spans_midnight: false, is_working: true,
+        earliest_start_hour: 8, earliest_start_minute: 0,
+        latest_start_hour: 9, latest_start_minute: 0,
+        latest_end_hour: 17, latest_end_minute: 0 },
+      { dow: 6, name: 'Sobota'       , planned_minutes: 0, hours: 0, minutes: 0,
+        flex: true, spans_midnight: false, is_working: false,
+        earliest_start_hour: null, earliest_start_minute: null,
+        latest_start_hour: null, latest_start_minute: null,
+        latest_end_hour: null, latest_end_minute: null },
+      { dow: 7, name: 'Niedziela'    , planned_minutes: 0, hours: 0, minutes: 0,
+        flex: true, spans_midnight: false, is_working: false,
+        earliest_start_hour: null, earliest_start_minute: null,
+        latest_start_hour: null, latest_start_minute: null,
+        latest_end_hour: null, latest_end_minute: null },
+    ],
+
+    pad2(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return '00';
+      return String(v).padStart(2, '0');
+    },
+
+    formatMinutes(total) {
+      const t = Number(total) || 0;
+      const h = Math.floor(t / 60);
+      const m = t % 60;
+      return `${h} h ${m} min`;
+    },
+
+    parseWeek() {
+      const [from, to] = (this.week || '').split('|');
+      this.effective_from = from || '';
+      this.effective_to = (to && to !== 'null') ? to : '';
+    },
+
+    convertMinutesToHM() {
+      this.days.forEach(d => {
+        d.hours = Math.floor((d.planned_minutes || 0) / 60);
+        d.minutes = (d.planned_minutes || 0) % 60;
+        d.is_working = (d.planned_minutes || 0) > 0;
+      });
+    },
+
+    initDayFromAPI(day, apiDay) {
+      day.planned_minutes = apiDay.planned_minutes || 0;
+      day.flex = !!apiDay.flex;
+      day.spans_midnight = !!apiDay.spans_midnight;
+      day.is_working = (apiDay.planned_minutes || 0) > 0;
+
+      // wymiar
+      day.hours = Math.floor((day.planned_minutes || 0) / 60);
+      day.minutes = (day.planned_minutes || 0) % 60;
+
+      // earliest_start / latest_start / latest_end: "HH:MM"
+      if (apiDay.earliest_start) {
+        const [h, m] = apiDay.earliest_start.split(':');
+        day.earliest_start_hour = Number(h);
+        day.earliest_start_minute = Number(m);
+      } else {
+        day.earliest_start_hour = null;
+        day.earliest_start_minute = null;
+      }
+
+      if (apiDay.latest_start) {
+        const [h, m] = apiDay.latest_start.split(':');
+        day.latest_start_hour = Number(h);
+        day.latest_start_minute = Number(m);
+      } else {
+        day.latest_start_hour = null;
+        day.latest_start_minute = null;
+      }
+
+      if (apiDay.latest_end) {
+        const [h, m] = apiDay.latest_end.split(':');
+        day.latest_end_hour = Number(h);
+        day.latest_end_minute = Number(m);
+      } else {
+        day.latest_end_hour = null;
+        day.latest_end_minute = null;
+      }
+    },
+
+    async init() {
+      this.parseWeek();
+      this.error = null;
+      this.success = null;
+
+      // dociągnij zakres effective_from/to z API, jeśli backend tak zwraca
+      try {
+        const url = `/api/user/${this.userId}/schedule/weekly/${this.week}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Nie udało się pobrać danych grafiku');
+        const json = await res.json();
+        const data = json.data || [];
+
+        if (data.length > 0) {
+          // zakładam, że effective_from/to są takie same dla wszystkich dni
+          const f = data[0].effective_from;
+          const t = data[0].effective_to;
+          if (f) this.effective_from = f.split('T')[0];
+          if (t) this.effective_to   = t.split('T')[0];
+
+          data.forEach(w => {
+            const d = this.days.find(x => x.dow === w.dow);
+            if (d) this.initDayFromAPI(d, w);
+          });
+        }
+      } catch (e) {
+        console.error(e);
+        this.error = e.message || 'Błąd pobierania grafiku';
+      }
+    },
+
+    async save() {
+      this.error = null;
+      this.success = null;
+
+      // przelicz wymiar na minuty
+      this.days.forEach(d => {
+        if (!d.is_working) {
+          d.planned_minutes = 0;
+          d.hours = 0;
+          d.minutes = 0;
+        } else {
+          const h = Number(d.hours) || 0;
+          const m = Number(d.minutes) || 0;
+          d.planned_minutes = (h * 60) + m;
+        }
+      });
+
+      const payload = {
+        effective_from: this.effective_from || null,
+        effective_to: this.effective_to || null,
+        days: this.days.map(d => ({
+          dow: d.dow,
+          planned_minutes: d.planned_minutes,
+          earliest_start: (d.earliest_start_hour != null && d.earliest_start_minute != null)
+            ? `${this.pad2(d.earliest_start_hour)}:${this.pad2(d.earliest_start_minute)}`
+            : null,
+          latest_start: (d.latest_start_hour != null && d.latest_start_minute != null)
+            ? `${this.pad2(d.latest_start_hour)}:${this.pad2(d.latest_start_minute)}`
+            : null,
+          latest_end: (d.latest_end_hour != null && d.latest_end_minute != null)
+            ? `${this.pad2(d.latest_end_hour)}:${this.pad2(d.latest_end_minute)}`
+            : null,
+          flex: !!d.flex,
+          spans_midnight: !!d.spans_midnight,
+        })),
+      };
+
+      try {
+        const url = `/api/user/${this.userId}/schedule/weekly/${this.week}`;
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          let msg = 'Nie udało się zapisać grafiku';
+          try {
+            const err = await res.json();
+            msg = err.error || msg;
+          } catch (_) {}
+          this.error = msg;
+          return;
+        }
+
+        this.success = 'Grafik zapisany poprawnie.';
+      } catch (e) {
+        console.error(e);
+        this.error = 'Błąd podczas zapisu grafiku';
+      }
+    }
+  }
+}
+</script>
+
+{{ template "layout-end" . }}
+{{ end }}
+

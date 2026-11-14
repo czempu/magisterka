@@ -1,0 +1,10 @@
+{
+  "heading": "Anmeldung bei ERPBadger",
+  "username_placeholder": "Benutzername / Login",
+  "password_placeholder": "Passwort",
+  "submit": "Anmelden",
+  "loading": "Wird angemeldet...",
+  "error_invalid": "Ungültiger Benutzername oder Passwort",
+  "error_server": "Fehler bei der Anmeldung",
+  "back_home": "← Zurück zur Startseite"
+}

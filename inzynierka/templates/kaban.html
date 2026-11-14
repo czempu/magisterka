@@ -1,0 +1,609 @@
+{{ define "kaban.html" }}
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    zinc: {
+                        850: '#1f1f22',
+                        900: '#18181b',
+                        950: '#09090b',
+                    }
+                }
+            }
+        }
+    }
+</script>
+
+<style>
+    /* Izolujemy tło i kolory tylko dla kontenera kanbana, żeby nie zepsuć layoutu globalnego */
+    #kanban-app { background-color: #09090b; color: #e4e4e7; font-family: ui-sans-serif, system-ui, sans-serif; }
+    
+    .markdown-body ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+    .markdown-body ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
+    .markdown-body h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5rem; color: #f4f4f5; }
+    .markdown-body h2 { font-size: 1.25em; font-weight: bold; margin-bottom: 0.5rem; color: #f4f4f5; }
+    .markdown-body p { margin-bottom: 1rem; }
+    .markdown-body code { background-color: #18181b; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: monospace; color: #a78bfa; border: 1px solid #27272a; }
+    .markdown-body pre { background-color: #18181b; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; border: 1px solid #27272a; margin-bottom: 1rem; }
+    .markdown-body pre code { background-color: transparent; border: none; padding: 0; color: #e4e4e7; }
+    .markdown-body blockquote { border-left: 4px solid #3f3f46; padding-left: 1rem; color: #a1a1aa; font-style: italic; }
+    
+    .dropzone-active { background-color: rgba(63, 63, 70, 0.4); border-color: #6366f1; }
+    .ghost-dragging { opacity: 0.4; transform: scale(0.98); }
+    [v-cloak] { display: none; }
+</style>
+
+<div id="kanban-app" class="min-h-screen flex flex-col" v-cloak>
+    
+    <nav class="bg-black border-b border-zinc-800 p-4 flex justify-between items-center sticky top-0 z-10 shadow-md">
+        <div class="flex items-center space-x-6">
+            <a href="/app/dashboard" class="text-xl font-bold tracking-wider text-zinc-100 flex items-center gap-2 hover:text-white transition">
+                <span>ERPBadger</span>
+                <span class="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">Kanban</span>
+            </a>
+            <div class="space-x-2">
+                <button @click="currentTab = 'list'" :class="currentTab === 'list' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'" class="px-3 py-1.5 rounded-md text-sm font-medium transition">[[ t('kanban.task_list', 'Lista Zadań') ]]</button>
+                <button @click="currentTab = 'calendar'" :class="currentTab === 'calendar' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white hover:bg-zinc-900'" class="px-3 py-1.5 rounded-md text-sm font-medium transition">[[ t('kanban.settlements', 'Rozliczenia') ]]</button>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <!-- Language Switcher (PL / EN / DE) -->
+            <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 text-xs font-medium">
+              <button 
+                type="button" 
+                class="px-2 py-1 rounded transition flex items-center gap-1"
+                :class="currentLang === 'pl' ? 'bg-zinc-700 text-white font-semibold' : 'text-zinc-400 hover:text-white'"
+                @click="setLang('pl')"
+                title="Polski"
+              >
+                <span>🇵🇱</span> <span>PL</span>
+              </button>
+              <button 
+                type="button" 
+                class="px-2 py-1 rounded transition flex items-center gap-1"
+                :class="currentLang === 'en' ? 'bg-zinc-700 text-white font-semibold' : 'text-zinc-400 hover:text-white'"
+                @click="setLang('en')"
+                title="English"
+              >
+                <span>🇬🇧</span> <span>EN</span>
+              </button>
+              <button 
+                type="button" 
+                class="px-2 py-1 rounded transition flex items-center gap-1"
+                :class="currentLang === 'de' ? 'bg-zinc-700 text-white font-semibold' : 'text-zinc-400 hover:text-white'"
+                @click="setLang('de')"
+                title="Deutsch"
+              >
+                <span>🇩🇪</span> <span>DE</span>
+              </button>
+            </div>
+
+            <button @click="openModal()" class="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md font-medium transition shadow-lg shadow-indigo-900/20">
+                <span class="text-lg leading-none">+</span>
+                <span>[[ t('kanban.new_ticket', 'Nowe Zadanie') ]]</span>
+            </button>
+        </div>
+    </nav>
+
+    <main class="flex-1 overflow-auto p-4 md:p-6 lg:px-20 xl:px-40">
+        
+        <div v-if="currentTab === 'list'" class="max-w-6xl mx-auto space-y-6 pb-12">
+            
+            <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex flex-col md:flex-row gap-4 items-center shadow-md">
+                <div class="relative w-full md:w-1/3">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <input v-model="searchQuery" type="text" :placeholder="t('kanban.search_placeholder', 'Szukaj (tytuł, opis)...')" class="w-full bg-black border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 outline-none transition placeholder-zinc-600">
+                </div>
+                
+                <div class="flex flex-wrap gap-2 flex-1 justify-end">
+                    <label v-for="col in kanbanColumns" :key="'filter-'+col.id" 
+                           :class="selectedFilterStatuses.includes(col.id) ? 'border-zinc-600 bg-zinc-800' : 'border-zinc-800 bg-black opacity-50'"
+                           class="flex items-center space-x-2 cursor-pointer border px-3 py-1.5 rounded-lg select-none transition hover:opacity-100">
+                        <input type="checkbox" :value="col.id" v-model="selectedFilterStatuses" class="hidden">
+                        <span class="text-xs font-bold tracking-wide" :class="col.color">[[ col.title ]]</span>
+                    </label>
+                </div>
+            </div>
+
+            <div v-for="col in filteredColumns" :key="col.id" 
+                 @dragover.prevent="dragEnterStatus = col.id"
+                 @dragleave.prevent="onDragLeave(col.id)"
+                 @drop.prevent="onDrop($event, col.id)"
+                 :class="dragEnterStatus === col.id ? 'bg-zinc-900/50 border-dashed border-indigo-500 shadow-inner' : 'border-transparent'"
+                 class="border-2 rounded-xl p-4 -mx-4 transition-all duration-200">
+                
+                <div class="flex items-end mb-4 border-b border-zinc-800 pb-2">
+                    <h2 class="text-lg font-semibold tracking-wide" :class="col.color">[[ col.title ]]</h2>
+                    <span class="text-zinc-500 text-sm ml-3 font-mono">[[ groupedTickets[col.id].length ]]</span>
+                </div>
+                
+                <div class="flex flex-col gap-2 min-h-[50px]">
+                    <div v-for="ticket in groupedTickets[col.id]" :key="ticket.id" 
+                         draggable="true"
+                         @dragstart="onDragStart($event, ticket)"
+                         @dragend="onDragEnd"
+                         @click="openModal(ticket)"
+                         class="group flex flex-col sm:flex-row sm:items-center justify-between bg-zinc-900 border border-zinc-800/50 p-3 rounded-lg hover:bg-zinc-850 hover:border-zinc-700 cursor-grab active:cursor-grabbing transition shadow-sm select-none">
+                        
+                        <div class="flex items-center gap-4 mb-2 sm:mb-0 overflow-hidden pointer-events-none">
+                            <span class="text-zinc-600 group-hover:text-indigo-400 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                            </span>
+                            <span class="text-zinc-500 font-mono text-xs w-10 flex-shrink-0">#[[ ticket.id ]]</span>
+                            <h3 class="font-medium text-zinc-200 group-hover:text-white truncate">[[ ticket.title ]]</h3>
+                        </div>
+                        
+                        <div class="flex items-center gap-4 sm:ml-4 flex-shrink-0 pointer-events-none">
+                            <span class="text-xs font-medium text-zinc-400 bg-zinc-950 border border-zinc-800 px-2 py-1 rounded-md">[[ ticket.type || 'Zadanie' ]]</span>
+                            
+                            <div class="flex gap-1.5 w-32 justify-end">
+                                <span v-for="user in ticket.assignees" :key="user" 
+                                      :class="user === 'Marcel' ? 'bg-cyan-950/50 text-cyan-400 border-cyan-900/50' : 'bg-fuchsia-950/50 text-fuchsia-400 border-fuchsia-900/50'"
+                                      class="text-[10px] font-bold px-2 py-0.5 rounded border">
+                                    [[ user ]]
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div v-if="groupedTickets[col.id].length === 0" 
+                         class="h-14 border-2 border-dashed border-zinc-800/60 rounded-lg flex items-center justify-center text-zinc-600 text-sm font-medium pointer-events-none">
+                        Brak zadań w tej sekcji. Upuść zadanie tutaj...
+                    </div>
+                </div>
+            </div>
+            
+            <div v-if="filteredTickets.length === 0" class="text-center py-20">
+                <div class="text-zinc-600 mb-2">Brak zadań spełniających kryteria.</div>
+                <button v-if="searchQuery" @click="searchQuery = ''" class="text-indigo-400 hover:text-indigo-300 mr-4">Wyczyść wyszukiwanie</button>
+                <button @click="openModal()" class="text-indigo-400 hover:text-indigo-300">Utwórz nowe zadanie</button>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'calendar'" class="max-w-4xl mx-auto bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center space-x-4">
+                    <button @click="prevMonth" class="text-zinc-500 hover:text-white p-2 transition">&larr;</button>
+                    <h2 class="text-xl font-semibold text-zinc-100 w-40 text-center">[[ currentMonthName ]]</h2>
+                    <button @click="nextMonth" class="text-zinc-500 hover:text-white p-2 transition">&rarr;</button>
+                </div>
+                
+                <div class="flex bg-black border border-zinc-800 p-1 rounded-lg">
+                    <button @click="activePerson = 'Marcel'" :class="activePerson === 'Marcel' ? 'bg-zinc-800 text-white shadow' : 'text-zinc-500 hover:text-zinc-300'" class="px-4 py-1.5 text-sm font-medium rounded-md transition">Marcel</button>
+                    <button @click="activePerson = 'Łukasz'" :class="activePerson === 'Łukasz' ? 'bg-zinc-800 text-white shadow' : 'text-zinc-500 hover:text-zinc-300'" class="px-4 py-1.5 text-sm font-medium rounded-md transition">Łukasz</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-7 gap-3 mb-8">
+                <div v-for="day in ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd']" class="text-center text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">[[ day ]]</div>
+                
+                <div v-for="date in calendarDays" :key="date.str" 
+                     @click="toggleStatus(date.str)"
+                     :class="getStatusClass(date.str)"
+                     class="h-20 flex flex-col items-center justify-center rounded-lg border cursor-pointer transition select-none hover:brightness-125 relative">
+                    <span class="text-lg font-semibold" :class="date.isCurrentMonth ? '' : 'opacity-40'">[[ date.day ]]</span>
+                    <span class="text-sm font-bold mt-1 tracking-widest absolute bottom-2">[[ getStatusLabel(date.str) ]]</span>
+                </div>
+            </div>
+
+            <div class="border-t border-zinc-800 pt-6">
+                <div class="flex justify-center mb-6 space-x-8 text-sm">
+                    <div class="flex items-center text-zinc-400"><div class="w-3 h-3 bg-red-500/20 border border-red-500/50 rounded-full mr-3"></div> C (Cwel) - 2h w tyg / 5h weekend</div>
+                    <div class="flex items-center text-zinc-400"><div class="w-3 h-3 bg-orange-500/20 border border-orange-500/50 rounded-full mr-3"></div> W (Wyjeba) - 2h w tyg / 5h weekend</div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-6 max-w-2xl mx-auto mb-6">
+                    <div class="bg-black border border-zinc-800 p-4 rounded-lg text-center">
+                        <h3 class="text-cyan-500 font-bold uppercase tracking-wider text-sm mb-3">Marcel</h3>
+                        <p class="text-zinc-400 text-sm mb-1">Dni w miesiącu (C/W): <span class="text-zinc-200">[[ stats.marcelC ]] / [[ stats.marcelW ]]</span></p>
+                        <p class="text-zinc-400 text-sm">Ogólny stracony czas: <span class="text-red-400 font-bold">[[ stats.marcelH ]]h</span></p>
+                    </div>
+                    <div class="bg-black border border-zinc-800 p-4 rounded-lg text-center">
+                        <h3 class="text-fuchsia-500 font-bold uppercase tracking-wider text-sm mb-3">Łukasz</h3>
+                        <p class="text-zinc-400 text-sm mb-1">Dni w miesiącu (C/W): <span class="text-zinc-200">[[ stats.lukaszC ]] / [[ stats.lukaszW ]]</span></p>
+                        <p class="text-zinc-400 text-sm">Ogólny stracony czas: <span class="text-red-400 font-bold">[[ stats.lukaszH ]]h</span></p>
+                    </div>
+                </div>
+                
+                <div class="text-center bg-red-950/20 border border-red-900/50 max-w-2xl mx-auto rounded-lg p-3">
+                    <p class="text-zinc-300">Razem zmarnowaliście <span class="text-red-500 font-bold text-lg">[[ stats.total ]] godzin</span></p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div v-if="isModalOpen" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-zinc-800 flex justify-between items-center bg-black/50">
+                <div class="flex items-center space-x-3">
+                    <span class="text-zinc-500 font-mono text-sm" v-if="editingTicket.id">#[[ editingTicket.id ]]</span>
+                    <h3 class="text-lg font-semibold text-zinc-100">[[ editingTicket.id ? 'Edytuj zadanie' : 'Utwórz nowe zadanie' ]]</h3>
+                </div>
+                <button @click="isModalOpen = false" class="text-zinc-500 hover:text-zinc-100 transition p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            
+            <div class="p-6 flex-1 overflow-y-auto space-y-6">
+                <div>
+                    <label class="block text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2">Tytuł zadania</label>
+                    <input v-model="editingTicket.title" placeholder="Np. Poprawić bazę danych..." class="w-full bg-black border border-zinc-800 rounded-md p-3 text-zinc-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition placeholder-zinc-700">
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2">Status</label>
+                        <select v-model="editingTicket.status" class="w-full bg-black border border-zinc-800 rounded-md p-3 text-zinc-100 focus:border-indigo-500 outline-none appearance-none cursor-pointer">
+                            <option v-for="col in kanbanColumns" :value="col.id">[[ col.title ]]</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2">Typ (Kategoria)</label>
+                        <input v-model="editingTicket.type" placeholder="Bug, Feature, Chore..." class="w-full bg-black border border-zinc-800 rounded-md p-3 text-zinc-100 focus:border-indigo-500 outline-none placeholder-zinc-700">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2">Przypisani</label>
+                        <div class="flex space-x-4 h-[46px] items-center bg-black border border-zinc-800 rounded-md px-4">
+                            <label class="flex items-center space-x-2 cursor-pointer group">
+                                <input type="checkbox" value="Marcel" v-model="editingTicket.assignees" class="rounded bg-zinc-900 border-zinc-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-black">
+                                <span class="text-sm text-zinc-300 group-hover:text-white transition">Marcel</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer group">
+                                <input type="checkbox" value="Łukasz" v-model="editingTicket.assignees" class="rounded bg-zinc-900 border-zinc-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-black">
+                                <span class="text-sm text-zinc-300 group-hover:text-white transition">Łukasz</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[300px]">
+                    <div class="flex flex-col">
+                        <label class="block text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2">Opis (Markdown wspierany)</label>
+                        <textarea v-model="editingTicket.description" placeholder="Opisz problem. Możesz używać list, pogrubień **text** itp..." class="w-full flex-1 bg-black border border-zinc-800 rounded-md p-4 text-zinc-300 resize-none outline-none focus:border-indigo-500 font-mono text-sm leading-relaxed placeholder-zinc-700"></textarea>
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="block text-zinc-400 text-xs font-bold uppercase tracking-wider mb-2">Podgląd Ostateczny</label>
+                        <div class="w-full flex-1 bg-black border border-zinc-800 rounded-md p-5 text-zinc-300 overflow-y-auto markdown-body" v-html="compiledMarkdown"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="px-6 py-4 border-t border-zinc-800 flex justify-between bg-black/50 items-center">
+                <div>
+                    <button v-if="editingTicket.id" @click="deleteTicket(editingTicket.id)" class="text-red-500 hover:text-red-400 text-sm font-semibold transition px-2 py-1">[[ t('common.delete', 'Usuń zadanie') ]]</button>
+                </div>
+                <div class="space-x-3">
+                    <button @click="isModalOpen = false" class="px-5 py-2 hover:bg-zinc-800 text-zinc-300 rounded-md text-sm font-medium transition border border-transparent hover:border-zinc-700">[[ t('common.cancel', 'Anuluj') ]]</button>
+                    <button @click="saveTicket" class="px-6 py-2 bg-zinc-100 hover:bg-white text-black rounded-md text-sm font-bold transition shadow-lg shadow-white/10">[[ t('common.save', 'Zapisz zadanie') ]]</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+    const app = createApp({
+        setup() {
+            const getSavedLang = () => {
+                const match = document.cookie.match(/(?:^|;\s*)lang=([^;]+)/);
+                if (match && match[1]) return match[1];
+                return localStorage.getItem('erpbadger_lang') || 'pl';
+            };
+
+            const currentLang = ref(getSavedLang());
+            const dict = ref({});
+
+            const loadLang = async (lang) => {
+                try {
+                    const res = await axios.get('/api/i18n/' + lang);
+                    dict.value = res.data || {};
+                } catch(e) {}
+            };
+
+            const setLang = (lang) => {
+                currentLang.value = lang;
+                try { localStorage.setItem('erpbadger_lang', lang); } catch(e) {}
+                document.cookie = 'lang=' + lang + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                loadLang(lang);
+            };
+
+            const t = (key, fallback) => {
+                if (dict.value && dict.value[key]) return dict.value[key];
+                return fallback !== undefined ? fallback : key;
+            };
+
+            const currentTab = ref('list');
+            const tickets = ref([]);
+            const calendarData = ref([]);
+            const activePerson = ref('Marcel');
+            
+            const isModalOpen = ref(false);
+            const editingTicket = ref({});
+            
+            const isDragging = ref(false);
+            const dragEnterStatus = ref(null);
+            
+            const currentDate = ref(new Date());
+            const searchQuery = ref('');
+            const selectedFilterStatuses = ref(['realizowany', 'do realizacji', 'pomysł', 'wstrzymany', 'zakończono', 'odrzucono']);
+            
+            let pollInterval = null;
+
+            const kanbanColumns = computed(() => [
+                { id: 'realizowany', title: t('kanban.in_progress', 'W trakcie'), color: 'text-yellow-500' },
+                { id: 'do realizacji', title: t('kanban.todo', 'Do zrobienia'), color: 'text-indigo-400' },
+                { id: 'pomysł', title: t('kanban.backlog', 'Backlog / Pomysły'), color: 'text-zinc-400' },
+                { id: 'wstrzymany', title: t('kanban.blocked', 'Zablokowane'), color: 'text-orange-500' },
+                { id: 'zakończono', title: t('kanban.done', 'Ukończone'), color: 'text-emerald-500' },
+                { id: 'odrzucono', title: t('kanban.cancelled', 'Anulowane'), color: 'text-red-500' }
+            ]);
+
+            const polishMonths = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+
+            const fetchData = async () => {
+                if (isDragging.value) return; 
+                
+                try {
+                    // UWAGA: Upewnij się, że endpoint to faktycznie '/api/tickets'.
+                    // Jeżeli przypiąłeś Kanban pod inny ruting (np. /api/kanban/tickets), zaktualizuj poniższe ścieżki!
+                    const [tRes, cRes] = await Promise.all([
+                        axios.get('/api/tickets'),
+                        axios.get('/api/calendar')
+                    ]);
+                    tickets.value = tRes.data || [];
+                    calendarData.value = cRes.data || [];
+                } catch (e) { console.error("Błąd synchronizacji", e); }
+            };
+
+            onMounted(() => {
+                loadLang(currentLang.value);
+                fetchData();
+                pollInterval = setInterval(fetchData, 3000); 
+            });
+            onUnmounted(() => clearInterval(pollInterval));
+
+            const filteredTickets = computed(() => {
+                let result = tickets.value;
+                const query = searchQuery.value.toLowerCase().trim();
+                
+                if (query) {
+                    result = result.filter(t => 
+                        (t.title && t.title.toLowerCase().includes(query)) || 
+                        (t.description && t.description.toLowerCase().includes(query))
+                    );
+                }
+                return result;
+            });
+
+            const groupedTickets = computed(() => {
+                const groups = {};
+                kanbanColumns.forEach(c => groups[c.id] = []);
+                
+                filteredTickets.value.forEach(t => {
+                    if(groups[t.status]) groups[t.status].push(t);
+                });
+                for(let key in groups) {
+                    groups[key].sort((a,b) => b.id - a.id); 
+                }
+                return groups;
+            });
+            
+            const filteredColumns = computed(() => {
+                return kanbanColumns.filter(col => selectedFilterStatuses.value.includes(col.id));
+            });
+
+            const onDragLeave = (colId) => {
+                if (dragEnterStatus.value === colId) {
+                    dragEnterStatus.value = null;
+                }
+            };
+
+            const onDragStart = (event, ticket) => {
+                isDragging.value = true; 
+                
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', String(ticket.id));
+                
+                setTimeout(() => {
+                    event.target.classList.add('ghost-dragging');
+                }, 10);
+            };
+
+            const onDragEnd = (event) => {
+                isDragging.value = false;
+                dragEnterStatus.value = null;
+                event.target.classList.remove('ghost-dragging');
+            };
+
+            const onDrop = async (event, targetStatus) => {
+                isDragging.value = false;
+                dragEnterStatus.value = null;
+                
+                const ticketId = event.dataTransfer.getData('text/plain');
+                if (!ticketId) return;
+                
+                const t = tickets.value.find(x => String(x.id) === ticketId);
+                
+                if (t && t.status !== targetStatus) {
+                    const originalStatus = t.status;
+                    t.status = targetStatus; 
+                    
+                    try {
+                        await axios.put(`/api/tickets/${t.id}`, t);
+                        const res = await axios.get('/api/tickets');
+                        tickets.value = res.data || [];
+                    } catch (e) {
+                        console.error("Błąd zapisu D&D", e);
+                        t.status = originalStatus; 
+                    }
+                }
+            };
+
+            const openModal = (ticket = null) => {
+                if (ticket) {
+                    editingTicket.value = JSON.parse(JSON.stringify(ticket));
+                } else {
+                    editingTicket.value = { title: '', description: '', type: 'Zadanie', status: 'do realizacji', assignees: [] };
+                }
+                isModalOpen.value = true;
+            };
+
+            const saveTicket = async () => {
+                if(!editingTicket.value.title) {
+                    alert("Tytuł zadania jest wymagany!");
+                    return;
+                }
+                
+                const t = editingTicket.value;
+                if (t.id) {
+                    await axios.put(`/api/tickets/${t.id}`, t);
+                } else {
+                    await axios.post('/api/tickets', t);
+                }
+                isDragging.value = false; 
+                await fetchData();
+                isModalOpen.value = false;
+            };
+
+            const deleteTicket = async (id) => {
+                if(confirm("Czy na pewno chcesz usunąć to zadanie na zawsze?")) {
+                    await axios.delete(`/api/tickets/${id}`);
+                    isDragging.value = false; 
+                    await fetchData();
+                    isModalOpen.value = false;
+                }
+            };
+
+            const compiledMarkdown = computed(() => {
+                return editingTicket.value.description ? marked.parse(editingTicket.value.description) : '<span class="text-zinc-600 italic">Brak opisu... wpisz coś w oknie obok.</span>';
+            });
+
+            const currentMonthName = computed(() => {
+                return `${polishMonths[currentDate.value.getMonth()]} ${currentDate.value.getFullYear()}`;
+            });
+            
+            const prevMonth = () => {
+                currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1);
+            };
+            
+            const nextMonth = () => {
+                currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1);
+            };
+
+            const formatDate = (y, m, d) => {
+                return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            };
+
+            const calendarDays = computed(() => {
+                const days = [];
+                const year = currentDate.value.getFullYear();
+                const month = currentDate.value.getMonth();
+                
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                
+                let startingDay = firstDay.getDay() - 1;
+                if (startingDay === -1) startingDay = 6;
+                
+                for (let i = 0; i < startingDay; i++) {
+                    const d = new Date(year, month, -startingDay + i + 1);
+                    days.push({ str: formatDate(d.getFullYear(), d.getMonth(), d.getDate()), day: d.getDate(), isCurrentMonth: false });
+                }
+                
+                for (let i = 1; i <= lastDay.getDate(); i++) {
+                    days.push({ str: formatDate(year, month, i), day: i, isCurrentMonth: true });
+                }
+                return days;
+            });
+
+            const getStatusForDate = (dateStr) => {
+                const entry = calendarData.value.find(e => e.person === activePerson.value && e.date_str === dateStr);
+                return entry ? entry.status : 0;
+            };
+
+            const getStatusClass = (dateStr) => {
+                const st = getStatusForDate(dateStr);
+                if (st === 1) return 'bg-red-500/10 border-red-500/30 text-red-400'; 
+                if (st === 2) return 'bg-orange-500/10 border-orange-500/30 text-orange-400'; 
+                return 'bg-black border-zinc-800/50 text-zinc-500'; 
+            };
+
+            const getStatusLabel = (dateStr) => {
+                const st = getStatusForDate(dateStr);
+                if (st === 1) return 'CWEL';
+                if (st === 2) return 'WYJEBA';
+                return '';
+            };
+
+            const toggleStatus = async (dateStr) => {
+                const currentStatus = getStatusForDate(dateStr);
+                const newStatus = (currentStatus + 1) % 3;
+                
+                const index = calendarData.value.findIndex(e => e.person === activePerson.value && e.date_str === dateStr);
+                if(index > -1) { calendarData.value[index].status = newStatus; } 
+                else { calendarData.value.push({ person: activePerson.value, date_str: dateStr, status: newStatus }); }
+
+                await axios.post('/api/calendar', { person: activePerson.value, date_str: dateStr, status: newStatus });
+            };
+
+            const stats = computed(() => {
+                let marcelC = 0, marcelW = 0, marcelH = 0;
+                let lukaszC = 0, lukaszW = 0, lukaszH = 0;
+                
+                const prefix = `${currentDate.value.getFullYear()}-${String(currentDate.value.getMonth() + 1).padStart(2, '0')}`;
+                
+                calendarData.value.forEach(e => {
+                    if(e.status === 1 || e.status === 2) {
+                        if(e.date_str.startsWith(prefix)) {
+                            if(e.person === 'Marcel') {
+                                if(e.status === 1) marcelC++;
+                                if(e.status === 2) marcelW++;
+                            } else if(e.person === 'Łukasz') {
+                                if(e.status === 1) lukaszC++;
+                                if(e.status === 2) lukaszW++;
+                            }
+                        }
+                        
+                        const dateObj = new Date(e.date_str);
+                        const dayOfWeek = dateObj.getDay(); 
+                        const hours = (dayOfWeek === 0 || dayOfWeek === 6) ? 5 : 2;
+                        
+                        if(e.person === 'Marcel') marcelH += hours;
+                        if(e.person === 'Łukasz') lukaszH += hours;
+                    }
+                });
+                
+                return { marcelC, marcelW, marcelH, lukaszC, lukaszW, lukaszH, total: marcelH + lukaszH };
+            });
+
+            return {
+                currentTab, activePerson, isModalOpen, kanbanColumns, tickets, groupedTickets,
+                filteredTickets, filteredColumns, searchQuery, selectedFilterStatuses,
+                openModal, saveTicket, deleteTicket, editingTicket, compiledMarkdown,
+                calendarDays, toggleStatus, getStatusClass, getStatusLabel,
+                currentDate, currentMonthName, prevMonth, nextMonth, stats,
+                isDragging, dragEnterStatus, onDragStart, onDragEnd, onDrop, onDragLeave,
+                currentLang, setLang, t
+            };
+        }
+    });
+
+    // KLUCZOWE: Zmiana znaczników bindowania dla Vue, by omijać konflikty z silnikiem Go Templates!
+    app.config.compilerOptions.delimiters = ['[[', ']]'];
+    app.mount('#kanban-app');
+</script>
+
+{{ end }}
